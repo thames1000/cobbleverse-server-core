@@ -21,12 +21,26 @@ import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
 import com.thamescape.cobbleverse.core.persistence.MigrationManager;
 import com.thamescape.cobbleverse.core.persistence.SqliteDatabaseProvider;
 import com.thamescape.cobbleverse.core.persistence.repository.AuditRepository;
+import com.thamescape.cobbleverse.core.persistence.repository.CurrencyRepository;
 import com.thamescape.cobbleverse.core.persistence.repository.PlayerProfileRepository;
+import com.thamescape.cobbleverse.core.persistence.repository.RewardRepository;
 import com.thamescape.cobbleverse.core.player.PlayerLifecycleListener;
 import com.thamescape.cobbleverse.core.player.PlayerProfileService;
+import com.thamescape.cobbleverse.core.reward.RewardRegistry;
+import com.thamescape.cobbleverse.core.reward.RewardService;
+import com.thamescape.cobbleverse.core.reward.RewardType;
+import com.thamescape.cobbleverse.core.reward.currency.CommandCurrencyProvider;
+import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
+import com.thamescape.cobbleverse.core.reward.currency.InternalCurrencyProvider;
+import com.thamescape.cobbleverse.core.reward.type.CommandRewardHandler;
+import com.thamescape.cobbleverse.core.reward.type.CommandTemplateRewardHandler;
+import com.thamescape.cobbleverse.core.reward.type.CurrencyRewardHandler;
+import com.thamescape.cobbleverse.core.reward.type.ItemRewardHandler;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 import com.thamescape.cobbleverse.core.scheduler.tasks.DatabaseFlushTask;
 import com.thamescape.cobbleverse.core.scheduler.tasks.PlaytimeUpdateTask;
+import com.thamescape.cobbleverse.core.util.ServerHolder;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +108,16 @@ public final class CoreBootstrap {
         AuditService auditService = new AuditService(core.enableAuditLog, databaseManager, auditRepository);
         PlayerProfileService playerService = new PlayerProfileService(databaseManager, playerRepository);
 
+        // 5b. Currency + reward systems.
+        IntegrationManager integrationManager = new IntegrationManager();
+        integrationManager.registerDefaults();
+        List<IntegrationReport> reports = integrationManager.detectAll();
+
+        CurrencyService currencyService = buildCurrencyService(configManager, databaseManager,
+                auditService, integrationManager);
+        RewardService rewardService = buildRewardService(configManager, databaseManager,
+                auditService, currencyService);
+
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();
         scheduler.init();
@@ -104,12 +128,7 @@ public final class CoreBootstrap {
                 (long) dbConfig.flushIntervalSeconds * CoreScheduler.TICKS_PER_SECOND,
                 new DatabaseFlushTask(playerService));
 
-        // 7. Register and detect integrations.
-        IntegrationManager integrationManager = new IntegrationManager();
-        integrationManager.registerDefaults();
-        List<IntegrationReport> reports = integrationManager.detectAll();
-
-        // 8. Register health checks.
+        // 7. Register health checks.
         HealthCheckService healthCheckService = new HealthCheckService();
         healthCheckService.register(new ConfigHealthCheck(configManager));
         healthCheckService.register(new DatabaseHealthCheck(databaseManager));
@@ -117,20 +136,61 @@ public final class CoreBootstrap {
         healthCheckService.register(new PermissionHealthCheck(integrationManager));
         healthCheckService.register(new IntegrationHealthCheck(integrationManager));
 
+        // 8. Track the running server so components built here can reach it later.
+        ServerLifecycleEvents.SERVER_STARTED.register(ServerHolder::set);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> ServerHolder.clear());
+
         // 9. Publish the service registry.
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
-                auditService, healthCheckService, databaseManager, playerService, scheduler);
+                auditService, healthCheckService, databaseManager, playerService, scheduler,
+                rewardService, currencyService);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.
         CommandRegistrar.register();
-        new PlayerLifecycleListener(playerService).register();
+        new PlayerLifecycleListener(playerService, rewardService).register();
 
         // 11. Print the startup report.
         new StartupReport(version(), databaseManager.describe(), core.activeSeason, false, reports).print();
 
         return registry;
+    }
+
+    private static CurrencyService buildCurrencyService(ConfigManager config, DatabaseManager db,
+                                                        AuditService audit, IntegrationManager integrations) {
+        CurrencyRepository currencyRepository = new CurrencyRepository();
+        CurrencyService currencyService = new CurrencyService(audit);
+        for (String currencyId : config.rewards().internalCurrencies) {
+            currencyService.register(new InternalCurrencyProvider(currencyId, db, currencyRepository));
+        }
+        if (integrations.isAvailable("cobbledollars")) {
+            currencyService.register(new CommandCurrencyProvider("cobbledollars",
+                    () -> config.rewards().templates.cobbledollarsDeposit,
+                    () -> config.rewards().templates.cobbledollarsWithdraw));
+        }
+        return currencyService;
+    }
+
+    private static RewardService buildRewardService(ConfigManager config, DatabaseManager db,
+                                                    AuditService audit, CurrencyService currencies) {
+        RewardRegistry registry = new RewardRegistry();
+        registry.register(new ItemRewardHandler());
+        registry.register(new CommandRewardHandler());
+        registry.register(new CurrencyRewardHandler(currencies));
+        registry.register(new CommandTemplateRewardHandler(RewardType.CRATE_KEY,
+                () -> config.rewards().templates.crateKey, "key",
+                e -> e.key, e -> e.amount + "x crate key '" + e.key + "'"));
+        registry.register(new CommandTemplateRewardHandler(RewardType.PERMISSION,
+                () -> config.rewards().templates.permission, "node",
+                e -> e.node, e -> "permission " + e.node));
+        registry.register(new CommandTemplateRewardHandler(RewardType.POKEMON,
+                () -> config.rewards().templates.pokemon, "value",
+                e -> e.value, e -> "pokemon " + e.value));
+        registry.register(new CommandTemplateRewardHandler(RewardType.COSMETIC,
+                () -> config.rewards().templates.cosmetic, "value",
+                e -> e.value, e -> "cosmetic " + e.value));
+        return new RewardService(config, db, new RewardRepository(), registry, audit);
     }
 
     private static DatabaseManager openDatabase(Path configDir, DatabaseConfig dbConfig) {

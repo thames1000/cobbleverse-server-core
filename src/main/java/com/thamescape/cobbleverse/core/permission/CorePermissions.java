@@ -15,10 +15,13 @@ public final class CorePermissions {
     // Command access
     public static final String COMMAND_CVCORE = "cobbleverse.command.cvcore";
     public static final String COMMAND_PROFILE = "cobbleverse.command.profile";
+    public static final String COMMAND_REWARDS = "cobbleverse.command.rewards";
 
     // Player-facing
     public static final String PROFILE_VIEW = "cobbleverse.profile.view";
     public static final String PROFILE_VIEW_OTHER = "cobbleverse.profile.view.other";
+    public static final String REWARD_CLAIM = "cobbleverse.reward.claim";
+    public static final String REWARD_PREVIEW = "cobbleverse.reward.preview";
 
     // Administrative actions
     public static final String ADMIN_RELOAD = "cobbleverse.admin.reload";
@@ -26,4 +29,5 @@ public final class CorePermissions {
     public static final String ADMIN_INTEGRATIONS = "cobbleverse.admin.integrations";
     public static final String ADMIN_DATABASE = "cobbleverse.admin.database";
     public static final String ADMIN_PLAYER = "cobbleverse.admin.player";
+    public static final String ADMIN_REWARDS = "cobbleverse.admin.rewards";
 }

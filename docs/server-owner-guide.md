@@ -32,9 +32,9 @@ commands, integration detection, messaging, health checks, auditing — that *fu
 build on.
 
 If you installed it expecting gameplay features, that's expected: the visible surface so far is the
-`/cvcore` and `/profile` commands, a startup report in the log, and a SQLite database tracking player
-identity and playtime. Gameplay (rewards, seasons, events) arrives as later versions and separate
-modules.
+`/cvcore`, `/profile`, and `/rewards` commands, a startup report in the log, a SQLite database
+tracking player identity and playtime, and a config-driven reward + currency system. Larger gameplay
+(seasons, events) arrives as later versions and separate modules.
 
 ---
 
@@ -157,6 +157,39 @@ Controls the SQLite database (default `config/cobbleverse-server-core/data/core.
 playtime is credited, and how often changed profiles are written back. **Not** runtime reloadable —
 changing it needs a restart. Full details in [database.md](database.md).
 
+### `rewards.json` (0.3.0)
+
+Defines reward bundles, the currencies the core owns, and command templates for reward types backed
+by other mods. Created with a sample definition on first run:
+
+```json
+{
+  "configVersion": 1,
+  "internalCurrencies": ["event_tokens", "battle_points", "cosmetic_shards"],
+  "templates": {
+    "crateKey": "",
+    "permission": "lp user {uuid} permission set {node} true",
+    "pokemon": "",
+    "cosmetic": "",
+    "cobbledollarsDeposit": "",
+    "cobbledollarsWithdraw": ""
+  },
+  "definitions": {
+    "sample_tier_1": {
+      "displayName": "Sample Tier 1 Reward",
+      "repeatable": false,
+      "rewards": [
+        { "type": "item", "item": "minecraft:diamond", "amount": 3 },
+        { "type": "currency", "currency": "event_tokens", "amount": 500 }
+      ]
+    }
+  }
+}
+```
+
+Runtime-reloadable with `/cvcore reload`. Full details (all reward types, template placeholders,
+offline queue behaviour) in [rewards.md](rewards.md).
+
 ### Configuration rules (important)
 
 - **A broken config is never silently replaced.** If a file has invalid JSON, the mod backs it up as
@@ -182,8 +215,13 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | 4           | Extended diagnostics                      |
 | `/cvcore database status` | `cobbleverse.admin.database` | 4        | DB connection, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | 4      | Pre-create a profile for a player who hasn't joined |
+| `/cvcore reward list`  | `cobbleverse.admin.rewards`   | 4          | List configured reward definitions        |
+| `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | 4 | Grant a reward (queues if player offline) |
 | `/profile`             | `cobbleverse.command.profile` | all        | Your own profile (UUID, joins, playtime)  |
 | `/profile <player>`    | `cobbleverse.profile.view.other` | 2       | Another player's profile (online or offline by name) |
+| `/rewards`             | `cobbleverse.command.rewards` | all        | List rewards and their claim state        |
+| `/rewards claim <id>`  | `cobbleverse.reward.claim`    | all        | Claim a reward for yourself                |
+| `/rewards preview <id>` | `cobbleverse.reward.preview` | all        | See what a reward would grant (dry run)   |
 
 ### What `/cvcore reload` does — and does not — do
 
@@ -209,6 +247,10 @@ cobbleverse.admin.reload       # /cvcore reload                          (op-4 f
 cobbleverse.admin.debug        # /cvcore debug                           (op-4 fallback)
 cobbleverse.admin.database     # /cvcore database status                 (op-4 fallback)
 cobbleverse.admin.player       # /cvcore player create <name>            (op-4 fallback)
+cobbleverse.admin.rewards      # /cvcore reward list | grant             (op-4 fallback)
+cobbleverse.command.rewards    # /rewards                                (available to all)
+cobbleverse.reward.claim       # /rewards claim <id>                     (available to all)
+cobbleverse.reward.preview     # /rewards preview <id>                   (available to all)
 cobbleverse.command.profile    # /profile (own)                          (available to all)
 cobbleverse.profile.view.other # /profile <player>                       (op-2 fallback)
 ```
@@ -275,6 +317,27 @@ This resolves the UUID the **same way the server would** — deterministically i
 a Mojang lookup in online-mode — so when the player later joins, their existing profile is matched
 and updated rather than duplicated. It never overwrites an existing profile, and the action is
 audited. This is the supported alternative to editing the SQLite database by hand.
+
+### Rewards and currencies
+
+Rewards are defined in `rewards.json` and granted through one central service that validates, dedups,
+audits, and (for offline players) queues them.
+
+- **Grant a reward:** `/cvcore reward grant <player> <id>`. If the player is offline it's queued and
+  delivered on their next join.
+- **Players claim their own:** `/rewards`, `/rewards claim <id>`, `/rewards preview <id>`.
+- **Claim once:** definitions are non-repeatable by default — a player can claim each only once
+  (enforced in the database). Set `"repeatable": true` to allow repeat claims.
+- **Reward types:** `item` and `command` work out of the box. `currency` uses the internal
+  currencies you list in `rewards.json` (stored by the core) or CobbleDollars. `crate_key`,
+  `permission`, `pokemon`, and `cosmetic` run a **command template** you configure under `templates`
+  — a blank template means that type reports "unsupported" instead of silently doing nothing, so fill
+  in the ones you use (e.g. a SkiesCrates give-key command for `crateKey`).
+- **Currencies:** internal currencies (e.g. `event_tokens`) are stored and audited by the core.
+  CobbleDollars is driven through the `cobbledollarsDeposit` / `cobbledollarsWithdraw` templates when
+  the mod is present.
+
+See [rewards.md](rewards.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 
@@ -404,6 +467,7 @@ update whichever of these applies:
 |---------------------------------------|-----------------------------------------------------|
 | A command or its permission           | [§6](#6-commands), [§7](#7-permissions-luckperms), `docs/commands.md`, `docs/permissions.md` |
 | A config field or file                | [§5](#5-configuration), `docs/configuration.md`     |
+| A reward type, currency, or template   | [§9](#9-day-to-day-operation), `docs/rewards.md`    |
 | An integration (added/removed/mod id) | [§8](#8-integrations), `docs/integrations.md`       |
 | Startup behaviour or the report       | [§4](#4-first-run--what-you-should-see), `docs/architecture.md` |
 | Anything user-visible                 | `CHANGELOG.md`                                      |

@@ -66,7 +66,13 @@ Templates use a MiniMessage subset (named + hex colors, decorations, two-stop gr
 intervals must be positive. Unlike `core.json` / `messages.json`, this file is **not** runtime
 reloadable — changing it requires a restart. See [database.md](database.md) for details.
 
+## `rewards.json` (0.3.0)
+
+Reward definitions, the core's internal currency ids, and command templates for mod-backed reward
+types. Created with a sample definition on first run; **runtime-reloadable** via `/cvcore reload`. See
+[rewards.md](rewards.md) for the full reference.
+
 ## Planned files
 
-Later versions add `permissions.json`, `scheduler.json`, `integrations.json`, `rewards.json`,
-`seasons.json` and `web-api.json`, each following the same versioned, strictly validated pattern.
+Later versions add `permissions.json`, `scheduler.json`, `integrations.json`, `seasons.json` and
+`web-api.json`, each following the same versioned, strictly validated pattern.
