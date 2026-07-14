@@ -6,6 +6,9 @@ import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
+import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
+import com.thamescape.cobbleverse.core.player.PlayerProfileService;
+import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 
 /**
  * Holds the single instance of each core service so features resolve dependencies through one place
@@ -22,19 +25,28 @@ public final class ServiceRegistry {
     private final IntegrationManager integrationManager;
     private final AuditService auditService;
     private final HealthCheckService healthCheckService;
+    private final DatabaseManager databaseManager;
+    private final PlayerProfileService playerProfileService;
+    private final CoreScheduler scheduler;
 
     public ServiceRegistry(ConfigManager configManager,
                            PermissionService permissionService,
                            MessageService messageService,
                            IntegrationManager integrationManager,
                            AuditService auditService,
-                           HealthCheckService healthCheckService) {
+                           HealthCheckService healthCheckService,
+                           DatabaseManager databaseManager,
+                           PlayerProfileService playerProfileService,
+                           CoreScheduler scheduler) {
         this.configManager = configManager;
         this.permissionService = permissionService;
         this.messageService = messageService;
         this.integrationManager = integrationManager;
         this.auditService = auditService;
         this.healthCheckService = healthCheckService;
+        this.databaseManager = databaseManager;
+        this.playerProfileService = playerProfileService;
+        this.scheduler = scheduler;
     }
 
     public ConfigManager config() {
@@ -59,5 +71,17 @@ public final class ServiceRegistry {
 
     public HealthCheckService health() {
         return healthCheckService;
+    }
+
+    public DatabaseManager database() {
+        return databaseManager;
+    }
+
+    public PlayerProfileService players() {
+        return playerProfileService;
+    }
+
+    public CoreScheduler scheduler() {
+        return scheduler;
     }
 }

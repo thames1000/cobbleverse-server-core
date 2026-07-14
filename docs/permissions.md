@@ -12,13 +12,16 @@ PermissionService perms = CoreServices.permissions();
 perms.check(source, CorePermissions.ADMIN_RELOAD, CoreConstants.ADMIN_FALLBACK_LEVEL); // op 4
 ```
 
-## Nodes in 0.1.0
+## Nodes
 
-| Node                          | Fallback | Grants                         |
-|-------------------------------|----------|--------------------------------|
-| `cobbleverse.command.cvcore`  | op 2     | `/cvcore info \| health \| integrations` |
-| `cobbleverse.admin.reload`    | op 4     | `/cvcore reload`               |
-| `cobbleverse.admin.debug`     | op 4     | `/cvcore debug`                |
+| Node                             | Fallback | Grants                                   |
+|----------------------------------|----------|------------------------------------------|
+| `cobbleverse.command.cvcore`     | op 2     | `/cvcore info \| health \| integrations` |
+| `cobbleverse.admin.reload`       | op 4     | `/cvcore reload`                         |
+| `cobbleverse.admin.debug`        | op 4     | `/cvcore debug`                          |
+| `cobbleverse.admin.database`     | op 4     | `/cvcore database status`                |
+| `cobbleverse.command.profile`    | all      | `/profile` (own)                         |
+| `cobbleverse.profile.view.other` | op 2     | `/profile <player>`                      |
 
 ## Reserved namespace
 

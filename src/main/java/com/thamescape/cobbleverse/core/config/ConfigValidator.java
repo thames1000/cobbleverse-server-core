@@ -39,6 +39,30 @@ public final class ConfigValidator {
         return problems;
     }
 
+    /** Validates {@link DatabaseConfig}, returning a list of problems (empty if valid). */
+    public static List<String> validate(DatabaseConfig config) {
+        List<String> problems = new ArrayList<>();
+
+        if (config.configVersion <= 0 || config.configVersion > DatabaseConfig.CURRENT_VERSION) {
+            problems.add("database.json: configVersion " + config.configVersion + " is out of range");
+        }
+        if (!"sqlite".equalsIgnoreCase(config.type)) {
+            problems.add("database.json: type '" + config.type
+                    + "' is unsupported (only 'sqlite' is available in this version)");
+        }
+        if (isBlank(config.fileName)) {
+            problems.add("database.json: fileName must not be blank");
+        }
+        if (config.flushIntervalSeconds <= 0) {
+            problems.add("database.json: flushIntervalSeconds must be positive");
+        }
+        if (config.playtimeAccrualSeconds <= 0) {
+            problems.add("database.json: playtimeAccrualSeconds must be positive");
+        }
+
+        return problems;
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

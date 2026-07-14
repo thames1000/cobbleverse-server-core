@@ -13,6 +13,7 @@ import com.thamescape.cobbleverse.core.integration.IntegrationReport;
 import com.thamescape.cobbleverse.core.message.MessageKey;
 import com.thamescape.cobbleverse.core.permission.CorePermissions;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
+import com.thamescape.cobbleverse.core.persistence.MigrationManager;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.command.ServerCommandSource;
@@ -57,6 +58,11 @@ public final class CoreCommand {
         root.then(literal("debug")
                 .requires(perms.require(CorePermissions.ADMIN_DEBUG, CoreConstants.ADMIN_FALLBACK_LEVEL))
                 .executes(ctx -> debug(ctx.getSource())));
+
+        root.then(literal("database")
+                .requires(perms.require(CorePermissions.ADMIN_DATABASE, CoreConstants.ADMIN_FALLBACK_LEVEL))
+                .then(literal("status")
+                        .executes(ctx -> databaseStatus(ctx.getSource()))));
 
         dispatcher.register(root);
     }
@@ -131,6 +137,26 @@ public final class CoreCommand {
         return 1;
     }
 
+    private static int databaseStatus(ServerCommandSource source) {
+        var db = CoreServices.database();
+        var players = CoreServices.players();
+        var audit = CoreServices.audit();
+
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Database")), false);
+        line(source, "Backend: " + db.describe());
+        line(source, "Connected: " + (db.isConnected() ? "yes" : "no"));
+        line(source, "Schema version: " + MigrationManager.withDefaults().currentVersion(db)
+                + " / " + MigrationManager.withDefaults().latestVersion());
+        line(source, "Stored profiles: " + players.storedCount());
+        line(source, "Online / cached: " + players.onlineCount() + " / " + players.cachedCount());
+        line(source, "Profiles pending flush: " + players.dirtyCount());
+        line(source, "DB writes queued: " + db.pending());
+        long auditRows = audit.storedCount();
+        line(source, "Audit rows: " + (auditRows < 0 ? "n/a" : auditRows));
+        return 1;
+    }
+
     private static void line(ServerCommandSource source, String text) {
         source.sendFeedback(() -> Text.literal("  " + text), false);
     }
@@ -142,8 +168,7 @@ public final class CoreCommand {
     }
 
     private static String storageLabel() {
-        // 0.1.0 has no persistence yet; the database layer arrives in 0.2.0.
-        return "none (in-memory, 0.1.0)";
+        return CoreServices.database().describe();
     }
 
     private static UUID actorUuid(ServerCommandSource source) {

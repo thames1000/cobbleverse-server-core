@@ -12,7 +12,9 @@ public final class CommandRegistrar {
     }
 
     public static void register() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                CoreCommand.register(dispatcher));
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            CoreCommand.register(dispatcher);
+            ProfileCommand.register(dispatcher);
+        });
     }
 }

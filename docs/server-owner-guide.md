@@ -31,8 +31,9 @@ cosmetics, seasons, or Pokémon rewards. It provides the plumbing — configurat
 commands, integration detection, messaging, health checks, auditing — that *future* feature modules
 build on.
 
-If you installed it expecting gameplay features, that's expected: in `0.1.0` the visible surface is
-the `/cvcore` command and a startup report in the log. Gameplay arrives as later versions and separate
+If you installed it expecting gameplay features, that's expected: the visible surface so far is the
+`/cvcore` and `/profile` commands, a startup report in the log, and a SQLite database tracking player
+identity and playtime. Gameplay (rewards, seasons, events) arrives as later versions and separate
 modules.
 
 ---
@@ -72,8 +73,10 @@ On boot the core prints a startup report to the server log (logger `CobbleverseC
 
 ```
 [CobbleverseCore] Initializing Cobbleverse Server Core...
-[CobbleverseCore] Version 0.1.0
-[CobbleverseCore] Storage: none (in-memory, 0.1.0)
+[CobbleverseCore] Connected: SQLite (.../config/cobbleverse-server-core/data/core.db)
+[CobbleverseCore] Schema up to date (version 1)
+[CobbleverseCore] Version 0.2.0
+[CobbleverseCore] Storage: SQLite (.../data/core.db)
 [CobbleverseCore] Active season: <none>
 [CobbleverseCore] LuckPerms: available (5.4.x)
 [CobbleverseCore] Cobblemon: available (1.6.x)
@@ -102,7 +105,7 @@ All files live under:
 <server>/config/cobbleverse-server-core/
 ```
 
-In `0.1.0` two files are created automatically:
+Files created automatically:
 
 ### `core.json`
 
@@ -138,6 +141,22 @@ Holds the message prefix and templates. Text uses a **MiniMessage subset** (name
 hex, `<bold>`/`<italic>`/etc., and two-stop `<gradient:#a:#b>…</gradient>`), plus `<placeholder>`
 tokens substituted at send time.
 
+### `database.json` (0.2.0)
+
+```json
+{
+  "configVersion": 1,
+  "type": "sqlite",
+  "fileName": "data/core.db",
+  "flushIntervalSeconds": 300,
+  "playtimeAccrualSeconds": 60
+}
+```
+
+Controls the SQLite database (default `config/cobbleverse-server-core/data/core.db`), how often
+playtime is credited, and how often changed profiles are written back. **Not** runtime reloadable —
+changing it needs a restart. Full details in [database.md](database.md).
+
 ### Configuration rules (important)
 
 - **A broken config is never silently replaced.** If a file has invalid JSON, the mod backs it up as
@@ -161,6 +180,9 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore integrations` | `cobbleverse.command.cvcore` | 2           | Lists each integration and its status     |
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | 4           | Reloads **safe** config + re-detects integrations |
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | 4           | Extended diagnostics                      |
+| `/cvcore database status` | `cobbleverse.admin.database` | 4        | DB connection, schema version, profile/audit counts |
+| `/profile`             | `cobbleverse.command.profile` | all        | Your own profile (UUID, joins, playtime)  |
+| `/profile <player>`    | `cobbleverse.profile.view.other` | 2       | Another player's profile (online or offline by name) |
 
 ### What `/cvcore reload` does — and does not — do
 
@@ -178,12 +200,15 @@ mixins. Changes to those always require a **full server restart**. When in doubt
 Every permission check runs through `fabric-permissions-api`, which LuckPerms implements. All nodes
 live under the `cobbleverse.` namespace, so you can grant everything with one wildcard.
 
-Nodes in `0.1.0`:
+Nodes:
 
 ```
 cobbleverse.command.cvcore     # /cvcore info | health | integrations   (op-2 fallback)
 cobbleverse.admin.reload       # /cvcore reload                          (op-4 fallback)
 cobbleverse.admin.debug        # /cvcore debug                           (op-4 fallback)
+cobbleverse.admin.database     # /cvcore database status                 (op-4 fallback)
+cobbleverse.command.profile    # /profile (own)                          (available to all)
+cobbleverse.profile.view.other # /profile <player>                       (op-2 fallback)
 ```
 
 Example LuckPerms setup for a staff group:
@@ -229,8 +254,11 @@ Check status any time with `/cvcore integrations`.
 - **Health:** `/cvcore health` gives an at-a-glance OK / WARN / ERROR per subsystem. `WARN` on
   Permissions just means no LuckPerms (fallback in use); that's fine on a small server.
 - **After editing `core.json` / `messages.json`:** run `/cvcore reload`. For any other change, restart.
-- **Auditing:** admin actions (e.g. reloads) are logged to the `CobbleverseCore/AUDIT` logger. In
-  `0.1.0` these are in-memory + log only; from `0.3.0` they persist to a database.
+- **Auditing:** admin actions (e.g. reloads) are logged to the `CobbleverseCore/AUDIT` logger and, as
+  of `0.2.0`, persisted to the `audit_log` table.
+- **Player data:** identity and playtime are stored in SQLite and survive restarts. Playtime accrues
+  every `playtimeAccrualSeconds` and is flushed every `flushIntervalSeconds` (see `database.json`);
+  it's also flushed on player leave and on server shutdown.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 

@@ -31,6 +31,12 @@ dependencies {
     modImplementation "me.lucko:fabric-permissions-api:${project.fabric_permissions_api_version}"
     include "me.lucko:fabric-permissions-api:${project.fabric_permissions_api_version}"
 
+    // SQLite persistence. The JDBC API itself is in the JDK; this driver is only needed at runtime,
+    // so it is bundled (jar-in-jar) rather than compiled against. The driver is loaded explicitly by
+    // class name at startup, which is reliable under Fabric's classloader.
+    include "org.xerial:sqlite-jdbc:${project.sqlite_jdbc_version}"
+    modRuntimeOnly "org.xerial:sqlite-jdbc:${project.sqlite_jdbc_version}"
+
     // NOTE: Integrations (Cobblemon, SkiesCrates, Ledger, CobbleDollars, HoloDisplays,
     // PlaceholderAPI) are detected at runtime via the Fabric mod list. The core does NOT
     // compile against them, so no compile dependency on those mods is required here.
@@ -38,6 +44,9 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // The SQLite driver is needed to run the persistence tests.
+    testRuntimeOnly "org.xerial:sqlite-jdbc:${project.sqlite_jdbc_version}"
 }
 
 test {

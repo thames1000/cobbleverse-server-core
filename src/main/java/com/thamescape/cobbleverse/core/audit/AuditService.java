@@ -1,5 +1,8 @@
 package com.thamescape.cobbleverse.core.audit;
 
+import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
+import com.thamescape.cobbleverse.core.persistence.repository.AuditRepository;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,9 +14,9 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Records core-owned actions. In 0.1.0 this logs to the {@code AUDIT} logger and retains a bounded
- * in-memory buffer of recent entries for diagnostics. Persistence to the {@code audit_log} table
- * lands with the database layer (0.3.0).
+ * Records core-owned actions. Logs to the {@code AUDIT} logger and retains a bounded in-memory buffer
+ * of recent entries for diagnostics. When a database is wired in (0.2.0+), entries are also persisted
+ * asynchronously to the {@code audit_log} table.
  */
 public final class AuditService {
 
@@ -21,11 +24,23 @@ public final class AuditService {
     private static final int MAX_RECENT = 200;
 
     private final boolean enabled;
+    @Nullable
+    private final DatabaseManager db;
+    @Nullable
+    private final AuditRepository repository;
     private final Deque<AuditEntry> recent = new ConcurrentLinkedDeque<>();
     private final AtomicInteger size = new AtomicInteger();
 
+    /** In-memory only (no persistence). */
     public AuditService(boolean enabled) {
+        this(enabled, null, null);
+    }
+
+    /** Persists to {@code audit_log} when {@code db} and {@code repository} are non-null. */
+    public AuditService(boolean enabled, @Nullable DatabaseManager db, @Nullable AuditRepository repository) {
         this.enabled = enabled;
+        this.db = db;
+        this.repository = repository;
     }
 
     /** Records an entry. The current time is stamped here so callers stay simple. */
@@ -40,6 +55,18 @@ public final class AuditService {
             size.decrementAndGet();
         }
         log(entry);
+        persist(entry);
+    }
+
+    private void persist(AuditEntry entry) {
+        if (db == null || repository == null) {
+            return;
+        }
+        db.runAsync(conn -> repository.insert(conn, entry))
+                .exceptionally(t -> {
+                    LOGGER.warn("Failed to persist audit entry {}: {}", entry.action(), t.getMessage());
+                    return null;
+                });
     }
 
     private void log(AuditEntry e) {
@@ -57,5 +84,17 @@ public final class AuditService {
 
     public boolean enabled() {
         return enabled;
+    }
+
+    public boolean persistent() {
+        return db != null && repository != null;
+    }
+
+    /** Total persisted audit rows, or -1 if persistence is not configured. */
+    public long storedCount() {
+        if (db == null || repository == null) {
+            return -1L;
+        }
+        return db.callSync(repository::count);
     }
 }

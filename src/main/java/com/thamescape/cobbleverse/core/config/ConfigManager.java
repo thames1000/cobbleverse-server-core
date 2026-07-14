@@ -16,9 +16,11 @@ public final class ConfigManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("CobbleverseCore/CONFIG");
     private static final String CORE_FILE = "core.json";
+    private static final String DATABASE_FILE = "database.json";
 
     private final ConfigLoader loader;
     private volatile CoreConfig coreConfig;
+    private volatile DatabaseConfig databaseConfig;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
@@ -35,6 +37,14 @@ public final class ConfigManager {
         this.coreConfig = loaded;
         LOGGER.info("Loaded core configuration (serverId={}, environment={})",
                 loaded.serverId, loaded.environment);
+
+        DatabaseConfig db = loader.loadOrCreate(DATABASE_FILE, DatabaseConfig.class, DatabaseConfig::defaults);
+        List<String> dbProblems = ConfigValidator.validate(db);
+        if (!dbProblems.isEmpty()) {
+            throw new ConfigurationException("CV-CONFIG-012",
+                    "Invalid database.json:\n  - " + String.join("\n  - ", dbProblems));
+        }
+        this.databaseConfig = db;
     }
 
     /**
@@ -61,6 +71,19 @@ public final class ConfigManager {
         if (current == null) {
             throw new ConfigurationException("CV-CONFIG-011",
                     "Core configuration accessed before load()");
+        }
+        return current;
+    }
+
+    /**
+     * The database config. Loaded once at startup and <b>not</b> runtime-reloadable — changing the
+     * driver or file requires a full restart, so {@link #reload()} deliberately leaves it untouched.
+     */
+    public DatabaseConfig database() {
+        DatabaseConfig current = databaseConfig;
+        if (current == null) {
+            throw new ConfigurationException("CV-CONFIG-013",
+                    "Database configuration accessed before load()");
         }
         return current;
     }
