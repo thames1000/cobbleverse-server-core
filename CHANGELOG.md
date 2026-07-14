@@ -3,6 +3,37 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - Unreleased
+
+Seasons and objectives (first pass) — manual/generic objectives to prove the season lifecycle,
+persistence, and reward milestones before wiring event-driven (Cobblemon) tracking in a later version.
+
+### Added
+- **Season system** (`season/`): `SeasonDefinition`, `SeasonService`, `SeasonRepository`,
+  `SeasonState` (upcoming / active / ended / disabled, derived from the configured window),
+  `SeasonProgress`, `ObjectiveDefinition`, `ObjectiveProgress`, `Milestone`.
+- **Objectives**: `ObjectiveType`, `ObjectiveRegistry`, `ObjectiveHandler` and a `ManualObjectiveHandler`.
+  0.4.0 ships only the `manual` type (progress set by admins / other modules); event-driven types
+  register handlers here later — no central switch. The registry is exposed via
+  `SeasonService.objectiveRegistry()` for future modules.
+- **Season points + milestones**: completing an objective awards its points; crossing a points
+  milestone grants a reward through the central `RewardService` (so milestones inherit claim dedup and
+  offline queueing).
+- **Lifecycle detection**: season start/end transitions are detected on startup and once a minute,
+  audited (`SEASON_CHANGED`) and recorded so each transition fires once.
+- **Commands**: `/season`, `/season progress`; `/cvcore season info | progress <player> |
+  addpoints <player> <amount> | objective <player> <objective> <amount>`.
+- **Config**: `seasons.json` (definitions, objectives, milestones) — runtime-reloadable. Which season
+  is current is named by `core.json`'s `activeSeason`.
+- **Schema**: migration `V004` adds `season_progress`, `objective_progress`, `season_lifecycle`.
+- **Permissions**: `cobbleverse.command.season`, `cobbleverse.season.view`,
+  `cobbleverse.season.progress`, `cobbleverse.admin.season`.
+- Audit types `SEASON_POINTS_CHANGED`, `SEASON_OBJECTIVE_COMPLETED`.
+
+### Not yet included (deliberately)
+- Cobblemon capture/battle/raid objective tracking — first pass proves lifecycle with manual
+  objectives; event-driven handlers come with 0.6.0.
+
 ## [0.3.1] - Unreleased
 
 Reward recovery hardening (from code review) — makes rewards recoverable when an integration

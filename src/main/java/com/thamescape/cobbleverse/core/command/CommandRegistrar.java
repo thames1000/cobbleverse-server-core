@@ -16,6 +16,7 @@ public final class CommandRegistrar {
             CoreCommand.register(dispatcher);
             ProfileCommand.register(dispatcher);
             RewardCommand.register(dispatcher);
+            SeasonCommand.register(dispatcher);
         });
     }
 }

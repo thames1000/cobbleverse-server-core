@@ -4,6 +4,7 @@ import com.thamescape.cobbleverse.core.persistence.migration.Migration;
 import com.thamescape.cobbleverse.core.persistence.migration.V001InitialSchema;
 import com.thamescape.cobbleverse.core.persistence.migration.V002RewardsAndCurrency;
 import com.thamescape.cobbleverse.core.persistence.migration.V003RewardRecovery;
+import com.thamescape.cobbleverse.core.persistence.migration.V004SeasonSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +38,8 @@ public final class MigrationManager {
         return new MigrationManager(List.of(
                 new V001InitialSchema(),
                 new V002RewardsAndCurrency(),
-                new V003RewardRecovery()));
+                new V003RewardRecovery(),
+                new V004SeasonSchema()));
     }
 
     /** Highest migration version this build ships. */

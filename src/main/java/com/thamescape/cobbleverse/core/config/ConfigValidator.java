@@ -145,6 +145,61 @@ public final class ConfigValidator {
         return problems;
     }
 
+    /** Validates {@link SeasonsConfig}, returning a list of problems (empty if valid). */
+    public static List<String> validate(SeasonsConfig config) {
+        List<String> problems = new ArrayList<>();
+        if (config.configVersion <= 0 || config.configVersion > SeasonsConfig.CURRENT_VERSION) {
+            problems.add("seasons.json: configVersion " + config.configVersion + " is out of range");
+        }
+        if (config.seasons == null) {
+            problems.add("seasons.json: seasons must be present");
+            return problems;
+        }
+        for (var entry : config.seasons.entrySet()) {
+            String id = entry.getKey();
+            var season = entry.getValue();
+            String where = "seasons.json: season '" + id + "'";
+            if (!isValidDateTime(season.startsAt)) {
+                problems.add(where + ": startsAt is not a valid ISO offset date-time");
+            }
+            if (!isValidDateTime(season.endsAt)) {
+                problems.add(where + ": endsAt is not a valid ISO offset date-time");
+            }
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (var objective : season.objectives) {
+                if (isBlank(objective.id)) {
+                    problems.add(where + ": an objective is missing 'id'");
+                } else if (!seen.add(objective.id)) {
+                    problems.add(where + ": duplicate objective id '" + objective.id + "'");
+                }
+                if (objective.required <= 0) {
+                    problems.add(where + " objective '" + objective.id + "': required must be positive");
+                }
+                if (objective.points < 0) {
+                    problems.add(where + " objective '" + objective.id + "': points must not be negative");
+                }
+            }
+            for (var milestone : season.milestones) {
+                if (milestone.points < 0) {
+                    problems.add(where + ": milestone points must not be negative");
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static boolean isValidDateTime(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        try {
+            java.time.OffsetDateTime.parse(value);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

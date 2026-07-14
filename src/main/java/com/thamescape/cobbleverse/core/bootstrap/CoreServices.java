@@ -11,6 +11,7 @@ import com.thamescape.cobbleverse.core.player.PlayerProfileService;
 import com.thamescape.cobbleverse.core.reward.RewardService;
 import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
+import com.thamescape.cobbleverse.core.season.SeasonService;
 
 /**
  * Static entry point to the {@link ServiceRegistry}. Convenient for commands and, later, feature
@@ -84,5 +85,9 @@ public final class CoreServices {
 
     public static CurrencyService currencies() {
         return registry().currencies();
+    }
+
+    public static SeasonService seasons() {
+        return registry().seasons();
     }
 }

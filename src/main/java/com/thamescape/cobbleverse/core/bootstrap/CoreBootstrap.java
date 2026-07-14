@@ -36,9 +36,14 @@ import com.thamescape.cobbleverse.core.reward.type.CommandRewardHandler;
 import com.thamescape.cobbleverse.core.reward.type.CommandTemplateRewardHandler;
 import com.thamescape.cobbleverse.core.reward.type.CurrencyRewardHandler;
 import com.thamescape.cobbleverse.core.reward.type.ItemRewardHandler;
+import com.thamescape.cobbleverse.core.persistence.repository.SeasonRepository;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 import com.thamescape.cobbleverse.core.scheduler.tasks.DatabaseFlushTask;
 import com.thamescape.cobbleverse.core.scheduler.tasks.PlaytimeUpdateTask;
+import com.thamescape.cobbleverse.core.scheduler.tasks.SeasonLifecycleTask;
+import com.thamescape.cobbleverse.core.season.SeasonService;
+import com.thamescape.cobbleverse.core.season.objective.ManualObjectiveHandler;
+import com.thamescape.cobbleverse.core.season.objective.ObjectiveRegistry;
 import com.thamescape.cobbleverse.core.util.ServerHolder;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -118,6 +123,13 @@ public final class CoreBootstrap {
         RewardService rewardService = buildRewardService(configManager, databaseManager,
                 auditService, currencyService);
 
+        // 5c. Season system. Objective handlers register in the ObjectiveRegistry (manual only in 0.4.0).
+        ObjectiveRegistry objectiveRegistry = new ObjectiveRegistry();
+        objectiveRegistry.register(new ManualObjectiveHandler());
+        SeasonService seasonService = new SeasonService(configManager, databaseManager,
+                new SeasonRepository(), rewardService, auditService, objectiveRegistry);
+        seasonService.checkLifecycle(); // record initial lifecycle state on boot
+
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();
         scheduler.init();
@@ -127,6 +139,9 @@ public final class CoreBootstrap {
         scheduler.scheduleRepeating(DatabaseFlushTask.ID,
                 (long) dbConfig.flushIntervalSeconds * CoreScheduler.TICKS_PER_SECOND,
                 new DatabaseFlushTask(playerService));
+        scheduler.scheduleRepeating(SeasonLifecycleTask.ID,
+                60L * CoreScheduler.TICKS_PER_SECOND, // check season transitions once a minute
+                new SeasonLifecycleTask(seasonService));
 
         // 7. Register health checks.
         HealthCheckService healthCheckService = new HealthCheckService();
@@ -144,7 +159,7 @@ public final class CoreBootstrap {
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
                 auditService, healthCheckService, databaseManager, playerService, scheduler,
-                rewardService, currencyService);
+                rewardService, currencyService, seasonService);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.

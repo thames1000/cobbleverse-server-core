@@ -18,6 +18,7 @@ com.thamescape.cobbleverse.core
 ├── persistence/               SQLite manager, migrations, repositories, transactions
 ├── player/                    player profiles, cache, lifecycle, sessions
 ├── reward/                    reward service, handlers (type/), currency (currency/)
+├── season/                    seasons, objectives (objective/), progress, milestones
 ├── scheduler/                 tick-based repeating / one-shot tasks
 ├── integration/               runtime mod detection (per-mod subpackages)
 ├── audit/                     server-owned action log (+ audit_log table)
@@ -25,8 +26,8 @@ com.thamescape.cobbleverse.core
 └── util/                      time formatting, error hierarchy (util/error)
 ```
 
-Packages present in the plan but not yet implemented (season, event, api) are added in their
-respective versions — see the roadmap in the README.
+Packages present in the plan but not yet implemented (event, api) are added in their respective
+versions — see the roadmap in the README.
 
 ## Startup sequence
 

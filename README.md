@@ -10,28 +10,29 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.3.1 (Rewards + Currency)
+## Status — 0.4.0 (Seasons + Objectives)
 
-Builds on the 0.2.0 persistence layer with a central reward system and currency abstraction
-(0.3.1 adds reward recovery: per-entry retry, offline-queue dead-lettering, admin retry):
+Builds on the reward system with time-boxed seasons, objectives, and points milestones (first pass:
+manual objectives; event-driven tracking comes later):
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
 | Configuration     | JSON loader + validator, strict (never silently defaults)       |
 | Service registry  | Single controlled locator (`CoreServices`)                      |
 | Permissions       | `fabric-permissions-api` with operator-level fallback           |
-| Commands          | `/cvcore …`, `/profile [player]`, `/rewards [claim\|preview]`    |
+| Commands          | `/cvcore …`, `/profile [player]`, `/rewards …`, `/season …`      |
 | Messaging         | MiniMessage-subset formatting → native `Text`                   |
 | Integrations      | Runtime detection of 7 mods (no compile-time coupling)          |
 | Persistence       | SQLite, off-thread worker, versioned auto-migrations            |
 | Player profiles   | Identity + playtime, cached, write-behind flush                 |
 | Scheduler         | Tick-based repeating / one-shot tasks                           |
-| **Rewards**       | **Central service: validate, claim-once, offline queue + retry/dead-letter, preview** |
-| **Currencies**    | **`CurrencyProvider` abstraction: internal (DB) + CobbleDollars** |
+| Rewards           | Central service: validate, claim-once, offline queue + retry/dead-letter, preview |
+| Currencies        | `CurrencyProvider` abstraction: internal (DB) + CobbleDollars    |
+| **Seasons**       | **Objectives, points, milestones (→ rewards), lifecycle detection** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
-Seasons and events arrive in later versions — see the [roadmap](#roadmap).
+Events (and event-driven objective tracking) arrive in later versions — see the [roadmap](#roadmap).
 
 ## Running a server?
 
@@ -83,13 +84,13 @@ error rather than being silently replaced.
 |---------|--------------------|
 | 0.1.0   | Foundation         |
 | 0.2.0   | Player profiles + SQLite |
-| 0.3.0   | Rewards + currency *(this release)* |
-| 0.4.0   | Seasons + objectives |
+| 0.3.0   | Rewards + currency |
+| 0.4.0   | Seasons + objectives *(this release)* |
 | 0.5.0   | Events + leaderboards |
 | 0.6.0   | Cobblemon tracking |
 | 0.7.0   | Web integration |
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
-permissions, configuration, [rewards](docs/rewards.md), [database](docs/database.md) and integration
-details.
+permissions, configuration, [rewards](docs/rewards.md), [seasons](docs/seasons.md),
+[database](docs/database.md) and integration details.
