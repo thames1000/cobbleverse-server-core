@@ -70,6 +70,9 @@ public final class ConfigValidator {
         if (config.configVersion <= 0 || config.configVersion > RewardsConfig.CURRENT_VERSION) {
             problems.add("rewards.json: configVersion " + config.configVersion + " is out of range");
         }
+        if (config.maxDeliveryAttempts <= 0) {
+            problems.add("rewards.json: maxDeliveryAttempts must be positive");
+        }
         if (config.definitions == null) {
             problems.add("rewards.json: definitions must be present");
             return problems;

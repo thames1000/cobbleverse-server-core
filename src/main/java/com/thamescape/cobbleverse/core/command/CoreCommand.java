@@ -89,7 +89,20 @@ public final class CoreCommand {
                                         .suggests(RewardCommand.ID_SUGGESTIONS)
                                         .executes(ctx -> rewardGrant(ctx.getSource(),
                                                 StringArgumentType.getString(ctx, "player"),
-                                                StringArgumentType.getString(ctx, "id")))))));
+                                                StringArgumentType.getString(ctx, "id"))))))
+                .then(literal("retry")
+                        .then(argument("player", StringArgumentType.word())
+                                .executes(ctx -> rewardRetry(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player"), null))
+                                .then(argument("id", StringArgumentType.word())
+                                        .suggests(RewardCommand.ID_SUGGESTIONS)
+                                        .executes(ctx -> rewardRetry(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "player"),
+                                                StringArgumentType.getString(ctx, "id"))))))
+                .then(literal("queue")
+                        .then(argument("player", StringArgumentType.word())
+                                .executes(ctx -> rewardQueue(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player"))))));
 
         dispatcher.register(root);
     }
@@ -269,33 +282,63 @@ public final class CoreCommand {
             return 0;
         }
         String actor = "admin:" + source.getName();
-        MinecraftServer server = source.getServer();
+        withResolvedUuid(source, playerName, uuid ->
+                RewardCommand.report(source, CoreServices.rewards().grant(uuid, id, actor)));
+        return 1;
+    }
 
+    private static int rewardRetry(ServerCommandSource source, String playerName, String id) {
+        withResolvedUuid(source, playerName, uuid -> {
+            var outcome = CoreServices.rewards().retry(uuid, id);
+            source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                    "Revived " + outcome.revived() + " dead-lettered reward(s); delivered "
+                            + outcome.delivered() + (outcome.online() ? "" : " (player offline — "
+                            + "revived rewards deliver on next join)"))), true);
+        });
+        return 1;
+    }
+
+    private static int rewardQueue(ServerCommandSource source, String playerName) {
+        withResolvedUuid(source, playerName, uuid -> {
+            var rows = CoreServices.rewards().queueSnapshot(uuid);
+            source.sendFeedback(() -> CoreServices.messages().prefix()
+                    .append(Text.literal("Reward queue (" + rows.size() + ")")), false);
+            if (rows.isEmpty()) {
+                line(source, "(empty)");
+            }
+            for (var row : rows) {
+                line(source, row.definitionId() + " — " + row.status()
+                        + " (attempts: " + row.attemptCount() + ", source: " + row.source() + ")");
+            }
+        });
+        return 1;
+    }
+
+    /** Resolves a player name to a UUID (online directly, offline via async Mojang lookup) then runs {@code action}. */
+    private static void withResolvedUuid(ServerCommandSource source, String playerName,
+                                         java.util.function.Consumer<UUID> action) {
+        MinecraftServer server = source.getServer();
         ServerPlayerEntity online = server.getPlayerManager().getPlayer(playerName);
         if (online != null) {
-            RewardCommand.report(source, CoreServices.rewards().grant(online.getUuid(), id, actor));
-            return 1;
+            action.accept(online.getUuid());
+            return;
         }
-
         UserCache userCache = server.getUserCache();
         if (userCache == null) {
             source.sendError(Text.literal("Player '" + playerName + "' is offline and no user cache is available."));
-            return 0;
+            return;
         }
         userCache.findByNameAsync(playerName).thenAccept(profile -> {
             if (profile.isEmpty()) {
-                server.execute(() -> source.sendError(
-                        Text.literal("No player found named '" + playerName + "'.")));
+                server.execute(() -> source.sendError(Text.literal("No player found named '" + playerName + "'.")));
                 return;
             }
             UUID uuid = profile.get().getId();
-            server.execute(() -> RewardCommand.report(source,
-                    CoreServices.rewards().grant(uuid, id, actor)));
+            server.execute(() -> action.accept(uuid));
         }).exceptionally(t -> {
             server.execute(() -> source.sendError(Text.literal("Lookup failed: " + t.getMessage())));
             return null;
         });
-        return 1;
     }
 
     private static void line(ServerCommandSource source, String text) {

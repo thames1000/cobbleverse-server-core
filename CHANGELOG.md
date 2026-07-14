@@ -3,6 +3,36 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - Unreleased
+
+Reward recovery hardening (from code review) — makes rewards recoverable when an integration
+temporarily fails, before seasons build on them.
+
+### Added
+- **Per-entry reward results** (`reward_entry_results`, migration `V003`): each reward entry's outcome
+  is tracked, so retrying a partial grant re-runs **only** the entries that haven't succeeded — items
+  and currency already granted are never re-granted.
+- **Claim completion status**: a non-repeatable claim is `PARTIAL` until every entry succeeds, then
+  `COMPLETE`. "Already claimed" now means genuinely complete, so partial grants remain retryable by
+  re-running the grant.
+- **Queue durability**: a failing queued delivery is **retained**, counts attempts, and dead-letters
+  after `maxDeliveryAttempts` (default 5) instead of being deleted. Offline re-grants reuse a single
+  queue row per definition.
+- **Admin recovery commands**: `/cvcore reward retry <player> [id]` (revive dead-lettered rewards and
+  deliver if online) and `/cvcore reward queue <player>` (inspect queue status/attempts).
+- **Slow-query logging**: database operations log WARN ≥ 50 ms, ERROR ≥ 250 ms.
+- `rewards.json`: `maxDeliveryAttempts`.
+
+### Changed
+- `PlayerProfileService.createIfAbsent` now uses an atomic `INSERT OR IGNORE` (was check-then-upsert),
+  so exactly one concurrent caller sees `CREATED`.
+- Auto-retry: queued/partial rewards retry on the player's next join (skipping succeeded entries),
+  dead-lettering after the attempt limit.
+
+### Fixed
+- Failed/unsupported queued rewards were being deleted after a delivery attempt (silent data loss);
+  they are now retained and retried, or dead-lettered for admin review.
+
 ## [0.3.0] - Unreleased
 
 ### Added

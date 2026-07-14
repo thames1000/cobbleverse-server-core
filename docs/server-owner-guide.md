@@ -217,6 +217,8 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | 4      | Pre-create a profile for a player who hasn't joined |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`   | 4          | List configured reward definitions        |
 | `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | 4 | Grant a reward (queues if player offline) |
+| `/cvcore reward retry <player> [id]` | `cobbleverse.admin.rewards` | 4 | Revive dead-lettered rewards and re-deliver |
+| `/cvcore reward queue <player>` | `cobbleverse.admin.rewards` | 4      | Inspect a player's reward queue (status, attempts) |
 | `/profile`             | `cobbleverse.command.profile` | all        | Your own profile (UUID, joins, playtime)  |
 | `/profile <player>`    | `cobbleverse.profile.view.other` | 2       | Another player's profile (online or offline by name) |
 | `/rewards`             | `cobbleverse.command.rewards` | all        | List rewards and their claim state        |
@@ -336,6 +338,11 @@ audits, and (for offline players) queues them.
 - **Currencies:** internal currencies (e.g. `event_tokens`) are stored and audited by the core.
   CobbleDollars is driven through the `cobbledollarsDeposit` / `cobbledollarsWithdraw` templates when
   the mod is present.
+- **Recovery (0.3.1):** if part of a reward fails (say an integration is briefly down), that reward
+  becomes `PARTIAL` and retrying re-runs only the missing parts — already-granted items/currency are
+  never duplicated. Queued deliveries that keep failing dead-letter after `maxDeliveryAttempts`
+  (default 5) rather than vanishing. Inspect with `/cvcore reward queue <player>` and recover with
+  `/cvcore reward retry <player> [id]`.
 
 See [rewards.md](rewards.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).

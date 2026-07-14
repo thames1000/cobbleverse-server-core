@@ -68,8 +68,9 @@ reloadable — changing it requires a restart. See [database.md](database.md) fo
 
 ## `rewards.json` (0.3.0)
 
-Reward definitions, the core's internal currency ids, and command templates for mod-backed reward
-types. Created with a sample definition on first run; **runtime-reloadable** via `/cvcore reload`. See
+Reward definitions, the core's internal currency ids, command templates for mod-backed reward types,
+and `maxDeliveryAttempts` (queued deliveries dead-letter after this many failures). Created with a
+sample definition on first run; **runtime-reloadable** via `/cvcore reload`. See
 [rewards.md](rewards.md) for the full reference.
 
 ## Planned files

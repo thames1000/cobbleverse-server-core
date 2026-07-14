@@ -70,7 +70,7 @@ public final class RewardCommand {
                 continue;
             }
             String state = def.repeatable ? "repeatable"
-                    : (player != null && CoreServices.rewards().hasClaimed(uuid, id)) ? "claimed" : "unclaimed";
+                    : (player != null && CoreServices.rewards().isFullyClaimed(uuid, id)) ? "claimed" : "unclaimed";
             source.sendFeedback(() -> Text.literal("  " + id + " — " + def.displayNameOrId()
                     + " [" + state + "]"), false);
         }

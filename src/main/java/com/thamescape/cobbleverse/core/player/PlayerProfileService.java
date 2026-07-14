@@ -134,14 +134,14 @@ public final class PlayerProfileService {
         if (cache.contains(uuid)) {
             return ProfileCreation.ALREADY_EXISTS;
         }
-        boolean exists = db.callSync(conn -> repository.find(conn, uuid).isPresent());
-        if (exists) {
-            return ProfileCreation.ALREADY_EXISTS;
-        }
+        // Atomic INSERT OR IGNORE: no check-then-write race, so exactly one caller sees CREATED.
         PlayerProfile profile = PlayerProfile.createNew(uuid, name, now);
-        db.runSync(conn -> repository.upsert(conn, profile));
-        LOGGER.info("Pre-created profile for {} ({})", name, uuid);
-        return ProfileCreation.CREATED;
+        boolean inserted = db.callSync(conn -> repository.insertIfAbsent(conn, profile));
+        if (inserted) {
+            LOGGER.info("Pre-created profile for {} ({})", name, uuid);
+            return ProfileCreation.CREATED;
+        }
+        return ProfileCreation.ALREADY_EXISTS;
     }
 
     /** Looks up a profile by UUID: cache first, then a synchronous DB read for offline players. */

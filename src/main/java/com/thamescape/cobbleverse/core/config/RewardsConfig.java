@@ -24,6 +24,9 @@ public class RewardsConfig {
     public List<String> internalCurrencies = new ArrayList<>(
             List.of("event_tokens", "battle_points", "cosmetic_shards"));
 
+    /** Failed queued deliveries dead-letter after this many attempts (then need an admin retry). */
+    public int maxDeliveryAttempts = 5;
+
     public Templates templates = new Templates();
 
     public Map<String, RewardDefinition> definitions = new LinkedHashMap<>();

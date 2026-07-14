@@ -53,7 +53,11 @@ class RewardServiceTest {
             RewardResult result = rewards.grant(uuid, "sample_tier_1", "test");
             assertEquals(RewardStatus.QUEUED, result.status());
             assertEquals(1L, db.callSync(repo::queueCount));
-            assertEquals(1, db.callSync(conn -> repo.findQueued(conn, uuid)).size());
+            assertEquals(1, db.callSync(conn -> repo.findDeliverable(conn, uuid)).size());
+
+            // Granting again reuses the single queue row (no duplicate).
+            rewards.grant(uuid, "sample_tier_1", "test");
+            assertEquals(1L, db.callSync(repo::queueCount), "offline re-grant must not duplicate the queue row");
         } finally {
             db.close();
         }
@@ -74,6 +78,8 @@ class RewardServiceTest {
             boolean secondInsert = db.callSync(conn ->
                     repo.insertClaimIfAbsent(conn, uuid, "sample_tier_1", 2L, "prior"));
             assertFalse(secondInsert);
+            // A claim is only "already claimed" once marked COMPLETE (all entries granted).
+            db.runSync(conn -> repo.setClaimStatus(conn, uuid, "sample_tier_1", RewardRepository.STATUS_COMPLETE));
 
             RewardResult result = rewards.grant(uuid, "sample_tier_1", "test");
             assertEquals(RewardStatus.ALREADY_CLAIMED, result.status());
@@ -114,11 +120,62 @@ class RewardServiceTest {
         RewardRepository repo = new RewardRepository();
         UUID uuid = UUID.randomUUID();
         try {
-            db.runSync(conn -> repo.queue(conn, uuid, "sample_tier_1", 1L, "test"));
-            var queued = db.callSync(conn -> repo.findQueued(conn, uuid));
+            db.runSync(conn -> repo.enqueueOrRevive(conn, uuid, "sample_tier_1", 1L, "test"));
+            var queued = db.callSync(conn -> repo.findDeliverable(conn, uuid));
             assertEquals(1, queued.size());
             db.runSync(conn -> repo.deleteQueued(conn, queued.get(0).id()));
-            assertTrue(db.callSync(conn -> repo.findQueued(conn, uuid)).isEmpty());
+            assertTrue(db.callSync(conn -> repo.findDeliverable(conn, uuid)).isEmpty());
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void queueDeadLettersAfterMaxAttempts() {
+        DatabaseManager db = open();
+        RewardRepository repo = new RewardRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            db.runSync(conn -> repo.enqueueOrRevive(conn, uuid, "sample_tier_1", 1L, "test"));
+            long id = db.callSync(conn -> repo.findDeliverable(conn, uuid)).get(0).id();
+
+            // Two failed attempts with max=2 dead-letters the row.
+            db.runSync(conn -> repo.recordQueueFailure(conn, id, "boom", 10L, 2));
+            assertEquals(1, db.callSync(conn -> repo.findDeliverable(conn, uuid)).size());
+            db.runSync(conn -> repo.recordQueueFailure(conn, id, "boom", 20L, 2));
+            assertTrue(db.callSync(conn -> repo.findDeliverable(conn, uuid)).isEmpty(),
+                    "dead-lettered row must not be deliverable");
+            assertEquals(1L, db.callSync(repo::deadCount));
+
+            // Admin revive brings it back.
+            int revived = db.callSync(conn -> repo.reviveDead(conn, uuid, null));
+            assertEquals(1, revived);
+            assertEquals(1, db.callSync(conn -> repo.findDeliverable(conn, uuid)).size());
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void entryResultsAndClaimStatus() {
+        DatabaseManager db = open();
+        RewardRepository repo = new RewardRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            boolean completeInitially = db.callSync(conn -> repo.isComplete(conn, uuid, "sample_tier_1"));
+            assertFalse(completeInitially);
+            db.runSync(conn -> repo.insertClaimIfAbsent(conn, uuid, "sample_tier_1", 1L, "test"));
+            boolean completeAfterInsert = db.callSync(conn -> repo.isComplete(conn, uuid, "sample_tier_1"));
+            assertFalse(completeAfterInsert, "a fresh claim is PARTIAL, not complete");
+
+            db.runSync(conn -> repo.upsertEntryResult(conn, uuid, "sample_tier_1", 0,
+                    RewardRepository.ENTRY_SUCCESS, null, 1L));
+            var results = db.callSync(conn -> repo.entryResults(conn, uuid, "sample_tier_1"));
+            assertEquals(RewardRepository.ENTRY_SUCCESS, results.get(0));
+
+            db.runSync(conn -> repo.setClaimStatus(conn, uuid, "sample_tier_1", RewardRepository.STATUS_COMPLETE));
+            boolean completeAfter = db.callSync(conn -> repo.isComplete(conn, uuid, "sample_tier_1"));
+            assertTrue(completeAfter);
         } finally {
             db.close();
         }

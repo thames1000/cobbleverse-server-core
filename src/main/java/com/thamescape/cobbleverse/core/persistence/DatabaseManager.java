@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class DatabaseManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("CobbleverseCore/DATABASE");
+    private static final long SLOW_WARN_MS = 50;
+    private static final long SLOW_ERROR_MS = 250;
 
     private final DatabaseProvider provider;
     private final ExecutorService executor;
@@ -103,11 +105,18 @@ public final class DatabaseManager {
         CompletableFuture<T> future = new CompletableFuture<>();
         inFlight.incrementAndGet();
         executor.execute(() -> {
+            long startNanos = System.nanoTime();
             try {
                 future.complete(work.apply(requireConnection()));
             } catch (Throwable t) {
                 future.completeExceptionally(wrap(t));
             } finally {
+                long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+                if (elapsedMs >= SLOW_ERROR_MS) {
+                    LOGGER.error("Slow database operation: {} ms (threshold {} ms)", elapsedMs, SLOW_ERROR_MS);
+                } else if (elapsedMs >= SLOW_WARN_MS) {
+                    LOGGER.warn("Slow database operation: {} ms (threshold {} ms)", elapsedMs, SLOW_WARN_MS);
+                }
                 inFlight.decrementAndGet();
             }
         });

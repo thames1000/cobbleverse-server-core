@@ -15,6 +15,8 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`  | op 4  | List configured reward definitions        |
 | `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline)  |
+| `/cvcore reward retry <player> [id]` | `cobbleverse.admin.rewards` | op 4 | Revive dead-lettered rewards, re-deliver |
+| `/cvcore reward queue <player>` | `cobbleverse.admin.rewards` | op 4 | Inspect a player's reward queue     |
 
 ## Player commands
 
