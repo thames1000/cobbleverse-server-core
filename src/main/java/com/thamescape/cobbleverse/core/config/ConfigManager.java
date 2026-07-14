@@ -17,10 +17,12 @@ public final class ConfigManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("CobbleverseCore/CONFIG");
     private static final String CORE_FILE = "core.json";
     private static final String DATABASE_FILE = "database.json";
+    private static final String REWARDS_FILE = "rewards.json";
 
     private final ConfigLoader loader;
     private volatile CoreConfig coreConfig;
     private volatile DatabaseConfig databaseConfig;
+    private volatile RewardsConfig rewardsConfig;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
@@ -45,6 +47,20 @@ public final class ConfigManager {
                     "Invalid database.json:\n  - " + String.join("\n  - ", dbProblems));
         }
         this.databaseConfig = db;
+
+        this.rewardsConfig = loadRewards();
+    }
+
+    private RewardsConfig loadRewards() {
+        RewardsConfig rewards = loader.loadOrCreate(REWARDS_FILE, RewardsConfig.class, RewardsConfig::defaults);
+        List<String> problems = ConfigValidator.validate(rewards);
+        if (!problems.isEmpty()) {
+            throw new ConfigurationException("CV-CONFIG-014",
+                    "Invalid rewards.json:\n  - " + String.join("\n  - ", problems));
+        }
+        // Back-fill each definition's id from its map key (ids are not stored in the JSON body).
+        rewards.definitions.forEach((id, def) -> def.id = id);
+        return rewards;
     }
 
     /**
@@ -54,14 +70,29 @@ public final class ConfigManager {
      * @return list of validation problems; empty on success
      */
     public List<String> reload() {
+        List<String> problems = new java.util.ArrayList<>();
+
         CoreConfig loaded = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
-        List<String> problems = ConfigValidator.validate(loaded);
-        if (problems.isEmpty()) {
+        List<String> coreProblems = ConfigValidator.validate(loaded);
+        if (coreProblems.isEmpty()) {
             this.coreConfig = loaded;
             LOGGER.info("Reloaded core configuration");
         } else {
-            LOGGER.warn("Reload rejected; keeping previous config. {} problem(s).", problems.size());
+            LOGGER.warn("core.json reload rejected; keeping previous. {} problem(s).", coreProblems.size());
+            problems.addAll(coreProblems);
         }
+
+        RewardsConfig rewards = loader.loadOrCreate(REWARDS_FILE, RewardsConfig.class, RewardsConfig::defaults);
+        List<String> rewardProblems = ConfigValidator.validate(rewards);
+        if (rewardProblems.isEmpty()) {
+            rewards.definitions.forEach((id, def) -> def.id = id);
+            this.rewardsConfig = rewards;
+            LOGGER.info("Reloaded reward definitions ({})", rewards.definitions.size());
+        } else {
+            LOGGER.warn("rewards.json reload rejected; keeping previous. {} problem(s).", rewardProblems.size());
+            problems.addAll(rewardProblems);
+        }
+
         return problems;
     }
 
@@ -84,6 +115,16 @@ public final class ConfigManager {
         if (current == null) {
             throw new ConfigurationException("CV-CONFIG-013",
                     "Database configuration accessed before load()");
+        }
+        return current;
+    }
+
+    /** The reward definitions and currency/template config. Runtime-reloadable. */
+    public RewardsConfig rewards() {
+        RewardsConfig current = rewardsConfig;
+        if (current == null) {
+            throw new ConfigurationException("CV-CONFIG-015",
+                    "Rewards configuration accessed before load()");
         }
         return current;
     }

@@ -21,8 +21,12 @@ perms.check(source, CorePermissions.ADMIN_RELOAD, CoreConstants.ADMIN_FALLBACK_L
 | `cobbleverse.admin.debug`        | op 4     | `/cvcore debug`                          |
 | `cobbleverse.admin.database`     | op 4     | `/cvcore database status`                |
 | `cobbleverse.admin.player`       | op 4     | `/cvcore player create <name>`           |
+| `cobbleverse.admin.rewards`      | op 4     | `/cvcore reward list \| grant`           |
 | `cobbleverse.command.profile`    | all      | `/profile` (own)                         |
 | `cobbleverse.profile.view.other` | op 2     | `/profile <player>`                      |
+| `cobbleverse.command.rewards`    | all      | `/rewards`                               |
+| `cobbleverse.reward.claim`       | all      | `/rewards claim <id>`                    |
+| `cobbleverse.reward.preview`     | all      | `/rewards preview <id>`                  |
 
 ## Reserved namespace
 

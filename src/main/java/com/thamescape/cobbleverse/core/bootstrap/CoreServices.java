@@ -8,6 +8,8 @@ import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
 import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
 import com.thamescape.cobbleverse.core.player.PlayerProfileService;
+import com.thamescape.cobbleverse.core.reward.RewardService;
+import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 
 /**
@@ -74,5 +76,13 @@ public final class CoreServices {
 
     public static CoreScheduler scheduler() {
         return registry().scheduler();
+    }
+
+    public static RewardService rewards() {
+        return registry().rewards();
+    }
+
+    public static CurrencyService currencies() {
+        return registry().currencies();
     }
 }

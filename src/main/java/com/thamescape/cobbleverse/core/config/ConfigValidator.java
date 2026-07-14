@@ -63,6 +63,85 @@ public final class ConfigValidator {
         return problems;
     }
 
+    /** Validates {@link RewardsConfig}, returning a list of problems (empty if valid). */
+    public static List<String> validate(RewardsConfig config) {
+        List<String> problems = new ArrayList<>();
+
+        if (config.configVersion <= 0 || config.configVersion > RewardsConfig.CURRENT_VERSION) {
+            problems.add("rewards.json: configVersion " + config.configVersion + " is out of range");
+        }
+        if (config.definitions == null) {
+            problems.add("rewards.json: definitions must be present");
+            return problems;
+        }
+
+        for (var entry : config.definitions.entrySet()) {
+            String id = entry.getKey();
+            var def = entry.getValue();
+            if (def == null || def.rewards == null || def.rewards.isEmpty()) {
+                problems.add("rewards.json: definition '" + id + "' has no rewards");
+                continue;
+            }
+            for (int i = 0; i < def.rewards.size(); i++) {
+                var reward = def.rewards.get(i);
+                String where = "rewards.json: definition '" + id + "' reward #" + (i + 1);
+                var type = com.thamescape.cobbleverse.core.reward.RewardType.fromId(reward.typeOrEmpty());
+                if (type.isEmpty()) {
+                    problems.add(where + ": unknown type '" + reward.typeOrEmpty() + "'");
+                    continue;
+                }
+                problems.addAll(validateRewardFields(where, type.get(), reward));
+            }
+        }
+        return problems;
+    }
+
+    private static List<String> validateRewardFields(
+            String where,
+            com.thamescape.cobbleverse.core.reward.RewardType type,
+            com.thamescape.cobbleverse.core.reward.RewardEntry reward) {
+        List<String> problems = new ArrayList<>();
+        switch (type) {
+            case ITEM -> {
+                if (isBlank(reward.item)) {
+                    problems.add(where + ": item type requires 'item'");
+                }
+                if (reward.amount <= 0) {
+                    problems.add(where + ": item amount must be positive");
+                }
+            }
+            case CURRENCY -> {
+                if (isBlank(reward.currency)) {
+                    problems.add(where + ": currency type requires 'currency'");
+                }
+                if (reward.amount <= 0) {
+                    problems.add(where + ": currency amount must be positive");
+                }
+            }
+            case COMMAND -> {
+                if (isBlank(reward.command)) {
+                    problems.add(where + ": command type requires 'command'");
+                }
+            }
+            case CRATE_KEY -> {
+                if (isBlank(reward.key)) {
+                    problems.add(where + ": crate_key type requires 'key'");
+                }
+            }
+            case PERMISSION -> {
+                if (isBlank(reward.node)) {
+                    problems.add(where + ": permission type requires 'node'");
+                }
+            }
+            case POKEMON, COSMETIC -> {
+                if (isBlank(reward.value)) {
+                    problems.add(where + ": " + type.id() + " type requires 'value'");
+                }
+            }
+        }
+        return problems;
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }

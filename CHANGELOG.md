@@ -3,6 +3,38 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - Unreleased
+
+### Added
+- **Reward system** — one central `RewardService` all rewards flow through: validates, executes each
+  entry, records a claim, audits, and returns a detailed result.
+  - **Reward types**: `item` and `command` (native), `currency` (via the currency abstraction), and
+    `crate_key` / `permission` / `pokemon` / `cosmetic` via configurable command templates.
+  - **Duplicate-claim prevention**: non-repeatable definitions reserve their claim (DB primary key)
+    before executing, so a reward can never be granted twice — even under concurrency or partial
+    failure.
+  - **Offline reward queue**: granting to an offline player queues the reward; it's delivered on their
+    next join.
+  - **Dry-run preview** (`/rewards preview`) describing what a definition would grant.
+- **Currency abstraction** — `CurrencyProvider` interface with a DB-backed `InternalCurrencyProvider`
+  (exact decimal balances + a transaction ledger) and a command-template `CommandCurrencyProvider`
+  for CobbleDollars. Routed and audited centrally by `CurrencyService`.
+- **Commands**: `/rewards`, `/rewards claim <id>`, `/rewards preview <id>`, `/cvcore reward list`,
+  `/cvcore reward grant <player> <id>` (queues if the player is offline).
+- **Config**: `rewards.json` — reward definitions, internal currency ids, and command templates.
+  Runtime-reloadable via `/cvcore reload`.
+- **Schema**: migration `V002` adds `reward_claims`, `reward_queue`, `currency_balances`,
+  `currency_transactions`.
+- **Permissions**: `cobbleverse.command.rewards`, `cobbleverse.reward.claim`,
+  `cobbleverse.reward.preview`, `cobbleverse.admin.rewards`.
+- Utilities: `ServerHolder`, `CommandRunner`.
+
+### Notes
+- Currency deposits/withdrawals and reward grants are audited (`CURRENCY_DEPOSIT`,
+  `CURRENCY_WITHDRAW`, `REWARD_GRANTED`).
+- Reward types backed by other mods use command templates (blank template = clearly reported as
+  unsupported) rather than compiling against those mods.
+
 ## [0.2.1] - Unreleased
 
 ### Added

@@ -21,6 +21,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.UserCache;
 import net.minecraft.util.Uuids;
@@ -77,6 +78,18 @@ public final class CoreCommand {
                         .then(argument("name", StringArgumentType.word())
                                 .executes(ctx -> playerCreate(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "name"))))));
+
+        root.then(literal("reward")
+                .requires(perms.require(CorePermissions.ADMIN_REWARDS, CoreConstants.ADMIN_FALLBACK_LEVEL))
+                .then(literal("list")
+                        .executes(ctx -> rewardList(ctx.getSource())))
+                .then(literal("grant")
+                        .then(argument("player", StringArgumentType.word())
+                                .then(argument("id", StringArgumentType.word())
+                                        .suggests(RewardCommand.ID_SUGGESTIONS)
+                                        .executes(ctx -> rewardGrant(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "player"),
+                                                StringArgumentType.getString(ctx, "id")))))));
 
         dispatcher.register(root);
     }
@@ -231,6 +244,58 @@ public final class CoreCommand {
             source.sendFeedback(() -> CoreServices.messages().prefix()
                     .append(Text.literal("Profile for " + name + " already exists (" + uuid + ")")), false);
         }
+    }
+
+    private static int rewardList(ServerCommandSource source) {
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Reward definitions")), false);
+        var ids = CoreServices.rewards().definitionIds();
+        if (ids.isEmpty()) {
+            line(source, "(none configured)");
+            return 1;
+        }
+        for (String id : ids) {
+            CoreServices.rewards().definition(id).ifPresent(def ->
+                    line(source, id + " — " + def.displayNameOrId()
+                            + (def.repeatable ? " [repeatable]" : "")
+                            + " (" + def.rewards.size() + " entries)"));
+        }
+        return 1;
+    }
+
+    private static int rewardGrant(ServerCommandSource source, String playerName, String id) {
+        if (CoreServices.rewards().definition(id).isEmpty()) {
+            source.sendError(Text.literal("No reward definition '" + id + "'."));
+            return 0;
+        }
+        String actor = "admin:" + source.getName();
+        MinecraftServer server = source.getServer();
+
+        ServerPlayerEntity online = server.getPlayerManager().getPlayer(playerName);
+        if (online != null) {
+            RewardCommand.report(source, CoreServices.rewards().grant(online.getUuid(), id, actor));
+            return 1;
+        }
+
+        UserCache userCache = server.getUserCache();
+        if (userCache == null) {
+            source.sendError(Text.literal("Player '" + playerName + "' is offline and no user cache is available."));
+            return 0;
+        }
+        userCache.findByNameAsync(playerName).thenAccept(profile -> {
+            if (profile.isEmpty()) {
+                server.execute(() -> source.sendError(
+                        Text.literal("No player found named '" + playerName + "'.")));
+                return;
+            }
+            UUID uuid = profile.get().getId();
+            server.execute(() -> RewardCommand.report(source,
+                    CoreServices.rewards().grant(uuid, id, actor)));
+        }).exceptionally(t -> {
+            server.execute(() -> source.sendError(Text.literal("Lookup failed: " + t.getMessage())));
+            return null;
+        });
+        return 1;
     }
 
     private static void line(ServerCommandSource source, String text) {

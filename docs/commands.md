@@ -13,6 +13,8 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | op 4     | Extended diagnostics (config dir, audit buffer, env) |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
+| `/cvcore reward list`  | `cobbleverse.admin.rewards`  | op 4  | List configured reward definitions        |
+| `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline)  |
 
 ## Player commands
 
@@ -20,6 +22,9 @@ fallback) and, with no argument, runs `info`.
 |---------------------|----------------------------------|----------|-------------------------------------|
 | `/profile`          | `cobbleverse.command.profile`    | all      | Your own profile (UUID, joins, playtime) |
 | `/profile <player>` | `cobbleverse.profile.view.other` | op 2     | Another player's profile (online, or offline by name) |
+| `/rewards`          | `cobbleverse.command.rewards`    | all      | List rewards and their claim state       |
+| `/rewards claim <id>` | `cobbleverse.reward.claim`     | all      | Claim a reward for yourself              |
+| `/rewards preview <id>` | `cobbleverse.reward.preview` | all      | Dry-run: what a reward would grant       |
 
 ## Reload scope
 

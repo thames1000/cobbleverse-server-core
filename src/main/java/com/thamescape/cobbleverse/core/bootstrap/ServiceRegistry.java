@@ -8,6 +8,8 @@ import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
 import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
 import com.thamescape.cobbleverse.core.player.PlayerProfileService;
+import com.thamescape.cobbleverse.core.reward.RewardService;
+import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 
 /**
@@ -28,6 +30,8 @@ public final class ServiceRegistry {
     private final DatabaseManager databaseManager;
     private final PlayerProfileService playerProfileService;
     private final CoreScheduler scheduler;
+    private final RewardService rewardService;
+    private final CurrencyService currencyService;
 
     public ServiceRegistry(ConfigManager configManager,
                            PermissionService permissionService,
@@ -37,7 +41,9 @@ public final class ServiceRegistry {
                            HealthCheckService healthCheckService,
                            DatabaseManager databaseManager,
                            PlayerProfileService playerProfileService,
-                           CoreScheduler scheduler) {
+                           CoreScheduler scheduler,
+                           RewardService rewardService,
+                           CurrencyService currencyService) {
         this.configManager = configManager;
         this.permissionService = permissionService;
         this.messageService = messageService;
@@ -47,6 +53,8 @@ public final class ServiceRegistry {
         this.databaseManager = databaseManager;
         this.playerProfileService = playerProfileService;
         this.scheduler = scheduler;
+        this.rewardService = rewardService;
+        this.currencyService = currencyService;
     }
 
     public ConfigManager config() {
@@ -83,5 +91,13 @@ public final class ServiceRegistry {
 
     public CoreScheduler scheduler() {
         return scheduler;
+    }
+
+    public RewardService rewards() {
+        return rewardService;
+    }
+
+    public CurrencyService currencies() {
+        return currencyService;
     }
 }

@@ -31,8 +31,9 @@ class PersistenceTest {
     @Test
     void migratesToLatestVersion() {
         DatabaseManager db = open();
+        MigrationManager mig = MigrationManager.withDefaults();
         try {
-            assertEquals(1, MigrationManager.withDefaults().currentVersion(db));
+            assertEquals(mig.latestVersion(), mig.currentVersion(db));
         } finally {
             db.close();
         }
@@ -46,7 +47,7 @@ class PersistenceTest {
         mig.migrate(db);
         mig.migrate(db); // second run must be a no-op
         try {
-            assertEquals(1, mig.currentVersion(db));
+            assertEquals(mig.latestVersion(), mig.currentVersion(db));
         } finally {
             db.close();
         }
@@ -112,7 +113,8 @@ class PersistenceTest {
         second.init();
         MigrationManager.withDefaults().migrate(second);
         try {
-            assertEquals(1, MigrationManager.withDefaults().currentVersion(second));
+            assertEquals(MigrationManager.withDefaults().latestVersion(),
+                    MigrationManager.withDefaults().currentVersion(second));
             PlayerProfile loaded = second.callSync(conn -> repo.find(conn, id).orElseThrow());
             assertEquals("Persist", loaded.lastKnownName());
         } finally {

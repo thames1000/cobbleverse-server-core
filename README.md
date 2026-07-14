@@ -10,25 +10,27 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.2.0 (Player Profiles + Persistence)
+## Status — 0.3.0 (Rewards + Currency)
 
-Builds on the 0.1.0 foundation with durable, server-owned storage:
+Builds on the 0.2.0 persistence layer with a central reward system and currency abstraction:
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
 | Configuration     | JSON loader + validator, strict (never silently defaults)       |
 | Service registry  | Single controlled locator (`CoreServices`)                      |
 | Permissions       | `fabric-permissions-api` with operator-level fallback           |
-| Commands          | `/cvcore info \| health \| integrations \| reload \| debug \| database status`, `/profile [player]` |
+| Commands          | `/cvcore …`, `/profile [player]`, `/rewards [claim\|preview]`    |
 | Messaging         | MiniMessage-subset formatting → native `Text`                   |
 | Integrations      | Runtime detection of 7 mods (no compile-time coupling)          |
-| **Persistence**   | **SQLite, off-thread worker, versioned auto-migrations**        |
-| **Player profiles** | **Identity + playtime, cached, write-behind flush**           |
-| **Scheduler**     | **Tick-based repeating / one-shot tasks**                       |
+| Persistence       | SQLite, off-thread worker, versioned auto-migrations            |
+| Player profiles   | Identity + playtime, cached, write-behind flush                 |
+| Scheduler         | Tick-based repeating / one-shot tasks                           |
+| **Rewards**       | **Central service: validate, claim-once, offline queue, preview** |
+| **Currencies**    | **`CurrencyProvider` abstraction: internal (DB) + CobbleDollars** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
-Rewards, seasons and events arrive in later versions — see the [roadmap](#roadmap).
+Seasons and events arrive in later versions — see the [roadmap](#roadmap).
 
 ## Running a server?
 
@@ -54,7 +56,9 @@ Fabric API. `fabric-permissions-api` is bundled (jar-in-jar), so no extra downlo
 | `/cvcore reload`       | `cobbleverse.admin.reload`     | op 4     | Reload safe configuration        |
 | `/cvcore debug`        | `cobbleverse.admin.debug`      | op 4     | Extended diagnostics             |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4   | Database + profile diagnostics   |
+| `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline) |
 | `/profile [player]`    | `cobbleverse.command.profile`  | all      | View a player profile            |
+| `/rewards [claim\|preview] <id>` | `cobbleverse.command.rewards` | all | Claim / preview rewards        |
 
 `reload` only reloads safe configuration (`core.json`, `messages.json`) and re-detects integrations.
 It never touches registries, world data, database drivers or mixins.
@@ -77,8 +81,8 @@ error rather than being silently replaced.
 | Version | Theme              |
 |---------|--------------------|
 | 0.1.0   | Foundation         |
-| 0.2.0   | Player profiles + SQLite *(this release)* |
-| 0.3.0   | Rewards + currency + audit persistence |
+| 0.2.0   | Player profiles + SQLite |
+| 0.3.0   | Rewards + currency *(this release)* |
 | 0.4.0   | Seasons + objectives |
 | 0.5.0   | Events + leaderboards |
 | 0.6.0   | Cobblemon tracking |
@@ -86,4 +90,5 @@ error rather than being silently replaced.
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
-permissions, configuration and integration details.
+permissions, configuration, [rewards](docs/rewards.md), [database](docs/database.md) and integration
+details.

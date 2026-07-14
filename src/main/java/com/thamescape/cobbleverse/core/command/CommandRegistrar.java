@@ -15,6 +15,7 @@ public final class CommandRegistrar {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             CoreCommand.register(dispatcher);
             ProfileCommand.register(dispatcher);
+            RewardCommand.register(dispatcher);
         });
     }
 }
