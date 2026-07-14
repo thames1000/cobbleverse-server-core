@@ -20,6 +20,7 @@ perms.check(source, CorePermissions.ADMIN_RELOAD, CoreConstants.ADMIN_FALLBACK_L
 | `cobbleverse.admin.reload`       | op 4     | `/cvcore reload`                         |
 | `cobbleverse.admin.debug`        | op 4     | `/cvcore debug`                          |
 | `cobbleverse.admin.database`     | op 4     | `/cvcore database status`                |
+| `cobbleverse.admin.player`       | op 4     | `/cvcore player create <name>`           |
 | `cobbleverse.command.profile`    | all      | `/profile` (own)                         |
 | `cobbleverse.profile.view.other` | op 2     | `/profile <player>`                      |
 

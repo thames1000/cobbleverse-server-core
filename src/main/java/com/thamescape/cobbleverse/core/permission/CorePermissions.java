@@ -25,4 +25,5 @@ public final class CorePermissions {
     public static final String ADMIN_DEBUG = "cobbleverse.admin.debug";
     public static final String ADMIN_INTEGRATIONS = "cobbleverse.admin.integrations";
     public static final String ADMIN_DATABASE = "cobbleverse.admin.database";
+    public static final String ADMIN_PLAYER = "cobbleverse.admin.player";
 }

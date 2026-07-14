@@ -116,6 +116,34 @@ public final class PlayerProfileService {
         LOGGER.info("Flushed {} profile(s) on shutdown", all.size());
     }
 
+    /** Outcome of {@link #createIfAbsent}. */
+    public enum ProfileCreation {
+        CREATED,
+        ALREADY_EXISTS
+    }
+
+    /**
+     * Ensures a profile exists for {@code uuid} without treating the player as online (no session is
+     * started). Used to pre-seed a profile for a player who has not joined yet. Never overwrites an
+     * existing profile.
+     *
+     * <p>May be called off the server thread (e.g. from an async name lookup); all database access
+     * goes through the worker thread, and the cache is concurrent.
+     */
+    public ProfileCreation createIfAbsent(UUID uuid, String name, long now) {
+        if (cache.contains(uuid)) {
+            return ProfileCreation.ALREADY_EXISTS;
+        }
+        boolean exists = db.callSync(conn -> repository.find(conn, uuid).isPresent());
+        if (exists) {
+            return ProfileCreation.ALREADY_EXISTS;
+        }
+        PlayerProfile profile = PlayerProfile.createNew(uuid, name, now);
+        db.runSync(conn -> repository.upsert(conn, profile));
+        LOGGER.info("Pre-created profile for {} ({})", name, uuid);
+        return ProfileCreation.CREATED;
+    }
+
     /** Looks up a profile by UUID: cache first, then a synchronous DB read for offline players. */
     public Optional<PlayerProfile> find(UUID uuid) {
         PlayerProfile cached = cache.get(uuid);
