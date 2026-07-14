@@ -6,6 +6,9 @@ import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
+import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
+import com.thamescape.cobbleverse.core.player.PlayerProfileService;
+import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 
 /**
  * Static entry point to the {@link ServiceRegistry}. Convenient for commands and, later, feature
@@ -59,5 +62,17 @@ public final class CoreServices {
 
     public static HealthCheckService health() {
         return registry().health();
+    }
+
+    public static DatabaseManager database() {
+        return registry().database();
+    }
+
+    public static PlayerProfileService players() {
+        return registry().players();
+    }
+
+    public static CoreScheduler scheduler() {
+        return registry().scheduler();
     }
 }

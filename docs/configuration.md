@@ -50,8 +50,23 @@ and `defaultLocale`, and a valid IANA `timezone`.
 Templates use a MiniMessage subset (named + hex colors, decorations, two-stop gradients) and
 `<name>` placeholders substituted at send time. Unknown message keys fall back to the key itself.
 
+## `database.json` (0.2.0)
+
+```json
+{
+  "configVersion": 1,
+  "type": "sqlite",
+  "fileName": "data/core.db",
+  "flushIntervalSeconds": 300,
+  "playtimeAccrualSeconds": 60
+}
+```
+
+`type` must be `sqlite` (the only supported backend); `fileName` is relative to the config directory;
+intervals must be positive. Unlike `core.json` / `messages.json`, this file is **not** runtime
+reloadable — changing it requires a restart. See [database.md](database.md) for details.
+
 ## Planned files
 
-Later versions add `database.json`, `permissions.json`, `scheduler.json`, `integrations.json`,
-`rewards.json`, `seasons.json` and `web-api.json`, each following the same versioned, strictly
-validated pattern.
+Later versions add `permissions.json`, `scheduler.json`, `integrations.json`, `rewards.json`,
+`seasons.json` and `web-api.json`, each following the same versioned, strictly validated pattern.

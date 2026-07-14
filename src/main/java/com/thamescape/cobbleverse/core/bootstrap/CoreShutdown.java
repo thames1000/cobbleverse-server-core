@@ -4,8 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Shuts core systems down safely on server stop. In 0.1.0 there is nothing to flush; from 0.2.0 this
- * closes the database, flushes pending profile writes and cancels scheduled tasks.
+ * Shuts core systems down safely on server stop: flushes all cached player profiles synchronously,
+ * then closes the database (which drains any remaining queued writes).
  */
 public final class CoreShutdown {
 
@@ -15,7 +15,15 @@ public final class CoreShutdown {
     }
 
     public static void run() {
-        LOGGER.info("Shutting down (no persistent state to flush in 0.1.0)");
-        // Future: close DatabaseService, flush PlayerProfileService, cancel scheduler tasks.
+        if (!CoreServices.isReady()) {
+            return;
+        }
+        LOGGER.info("Shutting down...");
+        try {
+            CoreServices.players().flushAllBlocking(System.currentTimeMillis());
+        } catch (Exception e) {
+            LOGGER.warn("Error flushing profiles on shutdown: {}", e.getMessage());
+        }
+        CoreServices.database().close();
     }
 }

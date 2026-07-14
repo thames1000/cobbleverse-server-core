@@ -10,23 +10,25 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.1.0 (Foundation)
+## Status — 0.2.0 (Player Profiles + Persistence)
 
-This release is the minimum foundation described in the architecture plan:
+Builds on the 0.1.0 foundation with durable, server-owned storage:
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
 | Configuration     | JSON loader + validator, strict (never silently defaults)       |
 | Service registry  | Single controlled locator (`CoreServices`)                      |
 | Permissions       | `fabric-permissions-api` with operator-level fallback           |
-| Commands          | `/cvcore info \| health \| integrations \| reload \| debug`      |
+| Commands          | `/cvcore info \| health \| integrations \| reload \| debug \| database status`, `/profile [player]` |
 | Messaging         | MiniMessage-subset formatting → native `Text`                   |
 | Integrations      | Runtime detection of 7 mods (no compile-time coupling)          |
-| Health checks     | Config, permissions, integrations                               |
-| Auditing          | Structured log + in-memory ring buffer                          |
+| **Persistence**   | **SQLite, off-thread worker, versioned auto-migrations**        |
+| **Player profiles** | **Identity + playtime, cached, write-behind flush**           |
+| **Scheduler**     | **Tick-based repeating / one-shot tasks**                       |
+| Health checks     | Config, permissions, integrations, database, scheduler          |
+| Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
-Persistence, player profiles, rewards, seasons and events arrive in later versions — see the
-[roadmap](#roadmap).
+Rewards, seasons and events arrive in later versions — see the [roadmap](#roadmap).
 
 ## Running a server?
 
@@ -51,6 +53,8 @@ Fabric API. `fabric-permissions-api` is bundled (jar-in-jar), so no extra downlo
 | `/cvcore integrations` | `cobbleverse.command.cvcore`   | op 2     | List detected mods               |
 | `/cvcore reload`       | `cobbleverse.admin.reload`     | op 4     | Reload safe configuration        |
 | `/cvcore debug`        | `cobbleverse.admin.debug`      | op 4     | Extended diagnostics             |
+| `/cvcore database status` | `cobbleverse.admin.database` | op 4   | Database + profile diagnostics   |
+| `/profile [player]`    | `cobbleverse.command.profile`  | all      | View a player profile            |
 
 `reload` only reloads safe configuration (`core.json`, `messages.json`) and re-detects integrations.
 It never touches registries, world data, database drivers or mixins.
@@ -72,8 +76,8 @@ error rather than being silently replaced.
 
 | Version | Theme              |
 |---------|--------------------|
-| 0.1.0   | Foundation *(this release)* |
-| 0.2.0   | Player profiles + SQLite |
+| 0.1.0   | Foundation         |
+| 0.2.0   | Player profiles + SQLite *(this release)* |
 | 0.3.0   | Rewards + currency + audit persistence |
 | 0.4.0   | Seasons + objectives |
 | 0.5.0   | Events + leaderboards |

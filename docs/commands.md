@@ -11,6 +11,14 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore integrations` | `cobbleverse.command.cvcore` | op 2     | Lists every integration and its status |
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | op 4     | Reloads safe config + re-detects integrations |
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | op 4     | Extended diagnostics (config dir, audit buffer, env) |
+| `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
+
+## Player commands
+
+| Command             | Permission                       | Fallback | Description                         |
+|---------------------|----------------------------------|----------|-------------------------------------|
+| `/profile`          | `cobbleverse.command.profile`    | all      | Your own profile (UUID, joins, playtime) |
+| `/profile <player>` | `cobbleverse.profile.view.other` | op 2     | Another player's profile (online, or offline by name) |
 
 ## Reload scope
 

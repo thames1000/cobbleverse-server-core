@@ -47,4 +47,25 @@ class ConfigValidatorTest {
         assertFalse(ConfigValidator.validate(config).isEmpty(),
                 "config from a newer build must be flagged");
     }
+
+    @Test
+    void databaseDefaultsAreValid() {
+        assertTrue(ConfigValidator.validate(DatabaseConfig.defaults()).isEmpty(),
+                "default database config should validate cleanly");
+    }
+
+    @Test
+    void unsupportedDatabaseTypeIsRejected() {
+        DatabaseConfig config = DatabaseConfig.defaults();
+        config.type = "postgres";
+        assertFalse(ConfigValidator.validate(config).isEmpty(),
+                "only sqlite is supported in this version");
+    }
+
+    @Test
+    void nonPositiveIntervalsAreRejected() {
+        DatabaseConfig config = DatabaseConfig.defaults();
+        config.flushIntervalSeconds = 0;
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "flush interval must be positive");
+    }
 }

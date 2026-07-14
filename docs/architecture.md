@@ -11,19 +11,21 @@ com.thamescape.cobbleverse.core
 ├── CobbleverseServerCore      entrypoint (ModInitializer)
 ├── CoreConstants              compile-time constants
 ├── bootstrap/                 startup order, service registry, dependency validation
-├── config/                    JSON load / validate / manage
+├── config/                    JSON load / validate / manage (core + database)
 ├── permission/                fabric-permissions-api wrapper
-├── command/                   /cvcore command tree
+├── command/                   /cvcore + /profile command trees
 ├── message/                   MiniMessage-subset formatting → Text
+├── persistence/               SQLite manager, migrations, repositories, transactions
+├── player/                    player profiles, cache, lifecycle, sessions
+├── scheduler/                 tick-based repeating / one-shot tasks
 ├── integration/               runtime mod detection (per-mod subpackages)
-├── audit/                     server-owned action log
+├── audit/                     server-owned action log (+ audit_log table)
 ├── diagnostics/               health checks
-└── util/error/                CoreException hierarchy
+└── util/                      time formatting, error hierarchy (util/error)
 ```
 
-Packages present as stubs in the plan but not implemented in 0.1.0 (persistence, player, season,
-event, reward, scheduler, api) are added in their respective versions — see the roadmap in the
-README.
+Packages present in the plan but not yet implemented (season, event, reward, api) are added in their
+respective versions — see the roadmap in the README.
 
 ## Startup sequence
 

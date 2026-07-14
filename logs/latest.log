@@ -1,0 +1,24 @@
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit11039775473505202907/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Applied migration V1 (initial_schema)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema migrated to version 1
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema up to date (version 1)
+[13:13:04] [Test worker/INFO]: Database connection closed
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit15067798546906694874/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Applied migration V1 (initial_schema)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema migrated to version 1
+[13:13:04] [Test worker/INFO]: Database connection closed
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit8641021701474057615/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Applied migration V1 (initial_schema)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema migrated to version 1
+[13:13:04] [Test worker/INFO]: Database connection closed
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit8641021701474057615/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema up to date (version 1)
+[13:13:04] [Test worker/INFO]: Database connection closed
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit11882084786013942735/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Applied migration V1 (initial_schema)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema migrated to version 1
+[13:13:04] [Test worker/INFO]: Database connection closed
+[13:13:04] [Test worker/INFO]: Connected: SQLite (/tmp/junit16634163519309486473/core.db)
+[13:13:04] [CobbleverseCore-DB/INFO]: Applied migration V1 (initial_schema)
+[13:13:04] [CobbleverseCore-DB/INFO]: Schema migrated to version 1
+[13:13:04] [Test worker/INFO]: Database connection closed
