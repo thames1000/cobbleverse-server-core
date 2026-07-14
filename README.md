@@ -1,0 +1,79 @@
+# Cobbleverse Server Core
+
+The shared server-side foundation for custom Cobbleverse features. It provides reusable systems —
+configuration, permissions, commands, integrations, messaging, health checks and auditing — that
+future feature modules (seasons, rewards, events, cosmetics, …) build on. The core does **not**
+contain crates, shops, cosmetics or Pokémon rewards itself; those live in separate modules that
+depend on this one.
+
+- **Minecraft:** 1.21.1
+- **Loader:** Fabric (Java 21)
+- **License:** MIT
+
+## Status — 0.1.0 (Foundation)
+
+This release is the minimum foundation described in the architecture plan:
+
+| System            | State                                                            |
+|-------------------|-----------------------------------------------------------------|
+| Configuration     | JSON loader + validator, strict (never silently defaults)       |
+| Service registry  | Single controlled locator (`CoreServices`)                      |
+| Permissions       | `fabric-permissions-api` with operator-level fallback           |
+| Commands          | `/cvcore info \| health \| integrations \| reload \| debug`      |
+| Messaging         | MiniMessage-subset formatting → native `Text`                   |
+| Integrations      | Runtime detection of 7 mods (no compile-time coupling)          |
+| Health checks     | Config, permissions, integrations                               |
+| Auditing          | Structured log + in-memory ring buffer                          |
+
+Persistence, player profiles, rewards, seasons and events arrive in later versions — see the
+[roadmap](#roadmap).
+
+## Building
+
+```bash
+./gradlew build
+```
+
+The remapped jar lands in `build/libs/`. Drop it into a Fabric **server**'s `mods/` folder alongside
+Fabric API. `fabric-permissions-api` is bundled (jar-in-jar), so no extra download is needed.
+
+## Commands
+
+| Command                | Permission                     | Fallback | Purpose                          |
+|------------------------|--------------------------------|----------|----------------------------------|
+| `/cvcore info`         | `cobbleverse.command.cvcore`   | op 2     | Version and status summary       |
+| `/cvcore health`       | `cobbleverse.command.cvcore`   | op 2     | Run diagnostics                  |
+| `/cvcore integrations` | `cobbleverse.command.cvcore`   | op 2     | List detected mods               |
+| `/cvcore reload`       | `cobbleverse.admin.reload`     | op 4     | Reload safe configuration        |
+| `/cvcore debug`        | `cobbleverse.admin.debug`      | op 4     | Extended diagnostics             |
+
+`reload` only reloads safe configuration (`core.json`, `messages.json`) and re-detects integrations.
+It never touches registries, world data, database drivers or mixins.
+
+## Integrations
+
+Detected at runtime via the Fabric mod list — the core never compiles against these mods, so a
+missing one degrades gracefully:
+
+LuckPerms · Cobblemon · Ledger · SkiesCrates · CobbleDollars · HoloDisplays · PlaceholderAPI
+
+## Configuration
+
+Lives under `config/cobbleverse-server-core/`. Files are created with defaults on first run and
+validated at startup; a malformed file is backed up (`.broken`) and startup aborts with a clear
+error rather than being silently replaced.
+
+## Roadmap
+
+| Version | Theme              |
+|---------|--------------------|
+| 0.1.0   | Foundation *(this release)* |
+| 0.2.0   | Player profiles + SQLite |
+| 0.3.0   | Rewards + currency + audit persistence |
+| 0.4.0   | Seasons + objectives |
+| 0.5.0   | Events + leaderboards |
+| 0.6.0   | Cobblemon tracking |
+| 0.7.0   | Web integration |
+| 1.0.0   | Stable public API |
+
+See `docs/` for architecture, commands, permissions, configuration and integration details.

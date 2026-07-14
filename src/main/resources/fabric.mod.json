@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "cobbleverse_server_core",
+  "version": "${version}",
+  "name": "Cobbleverse Server Core",
+  "description": "Shared server-side foundation for custom Cobbleverse features: configuration, permissions, commands, integrations, messaging, health checks and auditing.",
+  "authors": [
+    "Thamescape"
+  ],
+  "contact": {
+    "homepage": "https://github.com/thamescape/cobbleverse-server-core",
+    "sources": "https://github.com/thamescape/cobbleverse-server-core"
+  },
+  "license": "MIT",
+  "icon": "assets/cobbleverse_server_core/icon.png",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "com.thamescape.cobbleverse.core.CobbleverseServerCore"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  },
+  "suggests": {
+    "luckperms": "*",
+    "cobblemon": "*",
+    "ledger": "*",
+    "skiescrates": "*",
+    "cobbledollars": "*",
+    "holodisplays": "*",
+    "placeholder-api": "*"
+  }
+}

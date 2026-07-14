@@ -1,0 +1,7 @@
+{
+  "cobbleverse_server_core.command.cvcore.description": "Cobbleverse Server Core administration",
+  "cobbleverse_server_core.command.info": "Show core version and status",
+  "cobbleverse_server_core.command.health": "Run diagnostics and health checks",
+  "cobbleverse_server_core.command.integrations": "List detected third-party integrations",
+  "cobbleverse_server_core.command.reload": "Reload safe configuration"
+}
