@@ -3,6 +3,15 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - Unreleased
+
+### Added
+- `/cvcore player create <name>` — pre-creates a player profile without the player joining. Resolves
+  the UUID exactly as the server would: deterministically in offline-mode, or via an async Mojang
+  lookup in online-mode (never blocking the server thread). Never overwrites an existing profile.
+- `PlayerProfileService.createIfAbsent(...)` backing the command.
+- Permission node `cobbleverse.admin.player`.
+
 ## [0.2.0] - Unreleased
 
 ### Added

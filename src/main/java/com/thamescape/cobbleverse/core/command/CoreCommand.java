@@ -1,6 +1,8 @@
 package com.thamescape.cobbleverse.core.command;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.thamescape.cobbleverse.core.CoreConstants;
 import com.thamescape.cobbleverse.core.audit.AuditEntry;
@@ -14,15 +16,20 @@ import com.thamescape.cobbleverse.core.message.MessageKey;
 import com.thamescape.cobbleverse.core.permission.CorePermissions;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
 import com.thamescape.cobbleverse.core.persistence.MigrationManager;
+import com.thamescape.cobbleverse.core.player.PlayerProfileService;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.entity.Entity;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
+import net.minecraft.util.UserCache;
+import net.minecraft.util.Uuids;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 /**
@@ -63,6 +70,13 @@ public final class CoreCommand {
                 .requires(perms.require(CorePermissions.ADMIN_DATABASE, CoreConstants.ADMIN_FALLBACK_LEVEL))
                 .then(literal("status")
                         .executes(ctx -> databaseStatus(ctx.getSource()))));
+
+        root.then(literal("player")
+                .requires(perms.require(CorePermissions.ADMIN_PLAYER, CoreConstants.ADMIN_FALLBACK_LEVEL))
+                .then(literal("create")
+                        .then(argument("name", StringArgumentType.word())
+                                .executes(ctx -> playerCreate(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "name"))))));
 
         dispatcher.register(root);
     }
@@ -155,6 +169,68 @@ public final class CoreCommand {
         long auditRows = audit.storedCount();
         line(source, "Audit rows: " + (auditRows < 0 ? "n/a" : auditRows));
         return 1;
+    }
+
+    /**
+     * Pre-creates a profile for a player who has not joined. Resolves the UUID the same way the
+     * server would: deterministically for offline-mode, or via an async Mojang lookup for online-mode
+     * (so the command never blocks the server thread on the network).
+     */
+    private static int playerCreate(ServerCommandSource source, String name) {
+        MinecraftServer server = source.getServer();
+        long now = System.currentTimeMillis();
+
+        if (!server.isOnlineMode()) {
+            UUID uuid = Uuids.getOfflinePlayerUuid(name);
+            PlayerProfileService.ProfileCreation result =
+                    CoreServices.players().createIfAbsent(uuid, name, now);
+            report(source, uuid, name, result);
+            return result == PlayerProfileService.ProfileCreation.CREATED ? 1 : 0;
+        }
+
+        UserCache userCache = server.getUserCache();
+        if (userCache == null) {
+            source.sendError(Text.literal("User cache is unavailable; cannot resolve online-mode UUID."));
+            return 0;
+        }
+
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Looking up '" + name + "' with Mojang...")), false);
+
+        userCache.findByNameAsync(name).thenAccept(profile -> {
+            if (profile.isEmpty()) {
+                server.execute(() -> source.sendError(
+                        Text.literal("No Minecraft account found for '" + name + "'.")));
+                return;
+            }
+            GameProfile gameProfile = profile.get();
+            UUID uuid = gameProfile.getId();
+            String resolvedName = gameProfile.getName();
+            PlayerProfileService.ProfileCreation result =
+                    CoreServices.players().createIfAbsent(uuid, resolvedName, now);
+            server.execute(() -> report(source, uuid, resolvedName, result));
+        }).exceptionally(t -> {
+            server.execute(() -> source.sendError(
+                    Text.literal("Lookup failed: " + t.getMessage())));
+            return null;
+        });
+        return 1;
+    }
+
+    private static void report(ServerCommandSource source, UUID uuid, String name,
+                               PlayerProfileService.ProfileCreation result) {
+        if (result == PlayerProfileService.ProfileCreation.CREATED) {
+            CoreServices.audit().record(AuditEntry.builder(AuditType.PLAYER_PROFILE_EDITED)
+                    .actor(actorUuid(source), source.getName())
+                    .target(uuid)
+                    .source("admin_command")
+                    .context("pre-created profile for " + name));
+            source.sendFeedback(() -> CoreServices.messages().prefix()
+                    .append(Text.literal("Created profile for " + name + " (" + uuid + ")")), true);
+        } else {
+            source.sendFeedback(() -> CoreServices.messages().prefix()
+                    .append(Text.literal("Profile for " + name + " already exists (" + uuid + ")")), false);
+        }
     }
 
     private static void line(ServerCommandSource source, String text) {

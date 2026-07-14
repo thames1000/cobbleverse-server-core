@@ -8,6 +8,9 @@ build/
 run/
 remappedSrc/
 
+# Generated logs (e.g. from the test-run log4j config)
+logs/
+
 # IDE
 .idea/
 *.iml

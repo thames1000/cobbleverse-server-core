@@ -181,6 +181,7 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | 4           | Reloads **safe** config + re-detects integrations |
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | 4           | Extended diagnostics                      |
 | `/cvcore database status` | `cobbleverse.admin.database` | 4        | DB connection, schema version, profile/audit counts |
+| `/cvcore player create <name>` | `cobbleverse.admin.player` | 4      | Pre-create a profile for a player who hasn't joined |
 | `/profile`             | `cobbleverse.command.profile` | all        | Your own profile (UUID, joins, playtime)  |
 | `/profile <player>`    | `cobbleverse.profile.view.other` | 2       | Another player's profile (online or offline by name) |
 
@@ -207,6 +208,7 @@ cobbleverse.command.cvcore     # /cvcore info | health | integrations   (op-2 fa
 cobbleverse.admin.reload       # /cvcore reload                          (op-4 fallback)
 cobbleverse.admin.debug        # /cvcore debug                           (op-4 fallback)
 cobbleverse.admin.database     # /cvcore database status                 (op-4 fallback)
+cobbleverse.admin.player       # /cvcore player create <name>            (op-4 fallback)
 cobbleverse.command.profile    # /profile (own)                          (available to all)
 cobbleverse.profile.view.other # /profile <player>                       (op-2 fallback)
 ```
@@ -259,6 +261,20 @@ Check status any time with `/cvcore integrations`.
 - **Player data:** identity and playtime are stored in SQLite and survive restarts. Playtime accrues
   every `playtimeAccrualSeconds` and is flushed every `flushIntervalSeconds` (see `database.json`);
   it's also flushed on player leave and on server shutdown.
+
+### Pre-creating a profile before a player joins
+
+Normally a profile is created automatically the first time a player joins. To create one ahead of
+time (for example to seed data for a player who hasn't joined yet), use:
+
+```
+/cvcore player create <name>
+```
+
+This resolves the UUID the **same way the server would** — deterministically in offline-mode, or via
+a Mojang lookup in online-mode — so when the player later joins, their existing profile is matched
+and updated rather than duplicated. It never overwrites an existing profile, and the action is
+audited. This is the supported alternative to editing the SQLite database by hand.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 

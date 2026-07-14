@@ -12,6 +12,7 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | op 4     | Reloads safe config + re-detects integrations |
 | `/cvcore debug`        | `cobbleverse.admin.debug`    | op 4     | Extended diagnostics (config dir, audit buffer, env) |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
+| `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
 
 ## Player commands
 
