@@ -10,9 +10,10 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.3.0 (Rewards + Currency)
+## Status — 0.3.1 (Rewards + Currency)
 
-Builds on the 0.2.0 persistence layer with a central reward system and currency abstraction:
+Builds on the 0.2.0 persistence layer with a central reward system and currency abstraction
+(0.3.1 adds reward recovery: per-entry retry, offline-queue dead-lettering, admin retry):
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -25,7 +26,7 @@ Builds on the 0.2.0 persistence layer with a central reward system and currency 
 | Persistence       | SQLite, off-thread worker, versioned auto-migrations            |
 | Player profiles   | Identity + playtime, cached, write-behind flush                 |
 | Scheduler         | Tick-based repeating / one-shot tasks                           |
-| **Rewards**       | **Central service: validate, claim-once, offline queue, preview** |
+| **Rewards**       | **Central service: validate, claim-once, offline queue + retry/dead-letter, preview** |
 | **Currencies**    | **`CurrencyProvider` abstraction: internal (DB) + CobbleDollars** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |

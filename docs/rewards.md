@@ -10,6 +10,7 @@ flows through one central `RewardService` that validates, executes, records the 
 {
   "configVersion": 1,
   "internalCurrencies": ["event_tokens", "battle_points", "cosmetic_shards"],
+  "maxDeliveryAttempts": 5,
   "templates": {
     "crateKey": "crates key give {player} {key} {amount}",
     "permission": "lp user {uuid} permission set {node} true",
@@ -67,8 +68,25 @@ it can never be granted twice — even under concurrency or if execution partial
 ### Offline queue
 
 Granting to an offline player queues the whole definition (`reward_queue`) and delivers it on their
-next join, with a "Delivered N pending reward(s)" message. Queued non-repeatable rewards still dedup
-on delivery.
+next join, with a "Delivered N pending reward(s)" message. There is one queue row per (player,
+definition) — an offline re-grant reuses it rather than duplicating.
+
+### Recovery: partial grants, retries, and dead-lettering (0.3.1)
+
+Each reward entry's outcome is recorded in `reward_entry_results`, which makes rewards recoverable
+when one part fails (e.g. an integration is temporarily down):
+
+- **Partial grants retry cleanly.** If the item succeeds but the currency fails, the definition is
+  `PARTIAL`. Re-running the grant (`/cvcore reward grant`, or the player re-claiming) re-runs **only**
+  the currency — the already-granted item is skipped. A non-repeatable reward is "already claimed"
+  only once every entry has succeeded (`COMPLETE`).
+- **Queued deliveries don't silently vanish.** A failing queued delivery is retained, its
+  `attempt_count` increments, and it **dead-letters** after `maxDeliveryAttempts` (default 5, in
+  `rewards.json`) instead of being deleted. Auto-retry happens on each join.
+- **Admins can recover dead-lettered rewards:**
+  - `/cvcore reward queue <player>` — inspect queued rows (status, attempts, source).
+  - `/cvcore reward retry <player> [id]` — revive dead-lettered rewards (all, or one definition) and
+    deliver immediately if the player is online, else on their next join.
 
 ### Results
 
@@ -88,14 +106,18 @@ Currencies are abstracted behind `CurrencyProvider`; all movement is routed and 
 
 Do not turn currencies into physical items — they're player-attached balances.
 
-## Storage (migration V002)
+## Storage (migrations V002 + V003)
 
 ```
-reward_claims          (uuid, definition_id, claimed_at, source)   PRIMARY KEY(uuid, definition_id)
-reward_queue           (id, uuid, definition_id, queued_at, source)
-currency_balances      (uuid, currency, balance)                   PRIMARY KEY(uuid, currency)
+reward_claims          (uuid, definition_id, claimed_at, source, status)   PK(uuid, definition_id)
+reward_entry_results   (uuid, definition_id, entry_index, status, last_error, updated_at)  PK(uuid, definition_id, entry_index)
+reward_queue           (id, uuid, definition_id, queued_at, source, attempt_count, last_attempt_at, last_error, status)
+currency_balances      (uuid, currency, balance)                   PK(uuid, currency)
 currency_transactions  (id, uuid, currency, amount, type, timestamp, reason)
 ```
+
+`reward_claims.status` is `PARTIAL` or `COMPLETE`; `reward_queue.status` is `pending` or `dead`.
+V003 backfills pre-0.3.1 claims as `COMPLETE`.
 
 ## Auditing
 

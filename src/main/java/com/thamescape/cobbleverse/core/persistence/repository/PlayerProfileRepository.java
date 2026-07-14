@@ -38,6 +38,24 @@ public final class PlayerProfileRepository {
         }
     }
 
+    /**
+     * Inserts a profile only if none exists for its UUID, atomically. Returns true if this call
+     * inserted the row. Use to create a profile without racing a concurrent create/join.
+     */
+    public boolean insertIfAbsent(Connection conn, PlayerProfile profile) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO player_profiles"
+                        + "(uuid, last_known_name, first_joined_at, last_joined_at, playtime_seconds) "
+                        + "VALUES (?, ?, ?, ?, ?)")) {
+            ps.setString(1, profile.uuid().toString());
+            ps.setString(2, profile.lastKnownName());
+            ps.setLong(3, profile.firstJoinedAt());
+            ps.setLong(4, profile.lastJoinedAt());
+            ps.setLong(5, profile.playtimeSeconds());
+            return ps.executeUpdate() == 1;
+        }
+    }
+
     /** Inserts or updates a profile by UUID. {@code first_joined_at} is preserved on update. */
     public void upsert(Connection conn, PlayerProfile profile) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("""
