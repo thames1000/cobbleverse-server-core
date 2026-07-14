@@ -28,6 +28,11 @@ This release is the minimum foundation described in the architecture plan:
 Persistence, player profiles, rewards, seasons and events arrive in later versions — see the
 [roadmap](#roadmap).
 
+## Running a server?
+
+See the **[Server Owner Guide](docs/server-owner-guide.md)** — install, configure, operate, upgrade
+between versions, and (since this is your own project) modify the code and cut your own releases.
+
 ## Building
 
 ```bash
@@ -76,4 +81,5 @@ error rather than being silently replaced.
 | 0.7.0   | Web integration |
 | 1.0.0   | Stable public API |
 
-See `docs/` for architecture, commands, permissions, configuration and integration details.
+See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
+permissions, configuration and integration details.
