@@ -131,12 +131,10 @@ validation confirms each objective `type` against the **live registry** (not a c
 both at startup and on every `/cvcore reload`, so an unhandled type fails fast instead of silently
 never matching.
 
-> **Custom handlers (developer API — planned for 1.0):** the registry is the intended extension point
-> for third-party objective types, and its validation is already registry-driven. However, a public
-> registration surface that lets an external mod register a handler *before* startup validation runs
-> (a service-loader or init entrypoint) is **not exposed yet** — today the registry holds only the
-> core's built-in handlers. If you're building on this, track the 1.0 developer API rather than relying
-> on registration ordering now.
+> **Custom handlers (developer API — 0.8.0):** third-party mods register objective types via the
+> `CobbleverseExtension` entrypoint, which runs *before* config validation — so a custom `type` is
+> recognised rather than rejected. See [developer-api.md](developer-api.md). (The API is experimental
+> until it is frozen in 1.0.)
 
 Since capture events aren't wired to real gameplay until you verify Cobblemon (0.6.0), test objective
 auto-progress now with `/cvcore debug publish capture <player> <species> [shiny]`.

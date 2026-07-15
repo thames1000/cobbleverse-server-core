@@ -12,17 +12,18 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.7.0 (Web Integration)
+## Status — 0.8.0 (Developer API)
 
-Exposes the data the core already owns to the outside world, and pushes notable actions out. Two
-independent, **off-by-default** capabilities in `web.json`: a **read-only HTTP JSON API** (leaderboards,
-season/event state, player stats, health — loopback-bound and API-key protected) and **outbound
-webhooks** (selected audited actions forwarded to Discord/ops endpoints, `generic` or `discord` shape).
-No new runtime dependencies — the JDK's built-in HTTP server and client. See
-[web integration](docs/web-integration.md).
+The `api/` package — the supported surface for other mods, and the precursor to 1.0's stable public
+API. Mods **extend** the core by implementing `CobbleverseExtension` (declared as a Fabric
+`"cobbleverse"` entrypoint) and registering objective types, event listeners, currencies and health
+checks via `CobbleverseRegistrar` — during a dedicated startup phase **before** config validation, so
+custom objective types are recognised rather than rejected. Mods **consume** the core through the
+`CobbleverseApi` facade (season/stat reads, reward grants, event publishing). Experimental until frozen
+in 1.0. See [developer API](docs/developer-api.md).
 
-Prior: 0.6.0 shipped the game-event bus + a real Cobblemon adapter; 0.6.1 added event-driven season
-objectives and player statistics.
+Prior: 0.6.x shipped the game-event bus + Cobblemon adapter + objective/statistics consumers; 0.7.x
+added the web integration (HTTP API + webhooks) and its hardening.
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -42,8 +43,9 @@ objectives and player statistics.
 | Leaderboards      | Season points + event score (`/…leaderboard`, `/cvcore season top`) |
 | Game event bus    | Publish/subscribe ingestion layer; player events + Cobblemon capture/battle (optional dep) |
 | Bus consumers     | Event-driven season objectives + player statistics              |
-| **Web API**       | **Read-only HTTP JSON (leaderboards, season/event, player, stats, health); key-auth, loopback default** |
-| **Webhooks**      | **Selected audited actions pushed to HTTP endpoints (generic / Discord)** |
+| Web API           | Read-only HTTP JSON (leaderboards, season/event, player, stats, health); key-auth, loopback default |
+| Webhooks          | Selected audited actions pushed to HTTP endpoints (generic / Discord) |
+| **Developer API** | **Extension SPI (`CobbleverseExtension`/`Registrar`) + read/act facade (`CobbleverseApi`); experimental until 1.0** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
@@ -109,10 +111,11 @@ error rather than being silently replaced.
 | 0.5.0   | Events + leaderboards |
 | 0.6.0   | Game event bus |
 | 0.6.1   | Objective handlers + statistics (bus consumers) |
-| 0.7.0   | Web integration (HTTP API + webhooks) *(this release)* |
+| 0.7.0   | Web integration (HTTP API + webhooks) |
+| 0.8.0   | Developer API (extension SPI + facade) *(this release)* |
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
 permissions, configuration, [rewards](docs/rewards.md), [seasons](docs/seasons.md),
 [events](docs/events.md), [game events](docs/game-events.md), [web integration](docs/web-integration.md),
-[database](docs/database.md) and integration details.
+[developer API](docs/developer-api.md), [database](docs/database.md) and integration details.

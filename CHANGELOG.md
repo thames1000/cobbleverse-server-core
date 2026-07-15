@@ -3,6 +3,40 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - Unreleased
+
+The `api/` package — the supported surface for other mods, and the precursor to 1.0's stable public
+API. It turns the core's internal registries into a real extension platform and gives consumers a
+curated facade. **Experimental until frozen in 1.0.**
+
+### Added
+- **Extension SPI** (`api/`): implement `CobbleverseExtension` and declare it as a Fabric
+  `"cobbleverse"` entrypoint; the core hands each one a `CobbleverseRegistrar` to register
+  **objective handlers** (custom season objective types), **game-event listeners**, **currency
+  providers**, and **health checks**. Extensions run during a dedicated startup phase **before config
+  validation**, so a custom objective `type` is recognised (at startup *and* on `/cvcore reload`)
+  instead of being rejected as unknown — this closes the extension point that was deferred to "the 1.0
+  developer API". A broken extension (registration throwing, or a jar failing to load) is isolated and
+  logged (`CobbleverseCore/API`), never fatal.
+- **Read/act facade** (`CobbleverseApi`): `CobbleverseApi.get()` (guarded by `isReady()`) exposes a
+  curated, stable surface — `activeSeasonId()`, `isSeasonActive()`, `seasonPoints()`, `statistic()`,
+  `grantReward()`, `publishGameEvent()` — so mods don't reach into internal services.
+- **Docs**: [developer-api.md](docs/developer-api.md) (extend vs consume, entrypoint, timing,
+  versioning).
+
+### Changed
+- **Startup reordered** so the extensible registries (objective registry, game-event bus, health
+  checks, currencies) are all built *before* a single extension phase, which runs *before* the
+  objective-type semantic validation. The scheduler is now `init()`-ed early (so a health check can
+  observe it) and its periodic tasks are scheduled after their target services exist. No behavioural
+  change to existing systems; the built-in bus consumers still register after any extension listeners.
+
+### Notes
+- The extension entrypoint deliberately runs pre-validation and side-effect-free — register handlers,
+  don't touch the world. Consumption (`CobbleverseApi`) is available from `SERVER_STARTED` onward.
+- Custom **reward types** are not yet an extension point (the `RewardType` set is closed); revisit for
+  1.0. Objective types, listeners, currencies and health checks are open today.
+
 ## [0.7.1] - Unreleased
 
 Hardening pass over the 0.7.0 web integration (from PR review) — the fixes to make before exposing the

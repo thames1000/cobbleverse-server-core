@@ -10,6 +10,7 @@ that depend on the core — the core never depends on them.
 com.thamescape.cobbleverse.core
 ├── CobbleverseServerCore      entrypoint (ModInitializer)
 ├── CoreConstants              compile-time constants
+├── api/                       public developer API — extension SPI + read/act facade (0.8.0)
 ├── bootstrap/                 startup order, service registry, dependency validation
 ├── config/                    JSON load / validate / manage (core + database)
 ├── permission/                fabric-permissions-api wrapper
@@ -30,21 +31,27 @@ com.thamescape.cobbleverse.core
 └── util/                      time formatting, error hierarchy (util/error)
 ```
 
-The `api` package (public API surface for other mods) is added in a later version — see the roadmap
-in the README.
+The `api` package (public API surface for other mods) arrived in **0.8.0** — extension SPI
+(`CobbleverseExtension` / `CobbleverseRegistrar`) plus a read/act facade (`CobbleverseApi`). It stays
+experimental until frozen in 1.0. See [developer-api.md](developer-api.md).
+
+Extensions register during a dedicated startup phase (5d) **before** configuration validation, so a
+mod's custom objective type is validated instead of rejected. A broken extension is isolated and
+logged, never fatal.
 
 ## Startup sequence
 
 `CoreBootstrap.run()` runs a fixed order so failures are predictable:
 
 1. Validate required mods (`DependencyValidator`).
-2. Load + validate configuration.
-3. Build services (permissions, messages, audit).
+2. Load + structurally validate configuration.
+3. Build services (permissions, messages, audit, database, rewards) and the open registries.
 4. Register and detect integrations.
-5. Register health checks.
-6. Publish the `ServiceRegistry` into `CoreServices`.
-7. Register commands.
-8. Print the startup report.
+5. Register built-in health checks.
+6. **Run developer-API extensions** (`ExtensionLoader`) so they populate the registries…
+7. …then **semantically validate** config (e.g. objective types) against the now-complete registries.
+8. Build season/event/statistics/web services; publish the `ServiceRegistry` and `CobbleverseApi`.
+9. Register commands; print the startup report.
 
 A fatal error (missing dependency, invalid config) aborts initialization with a clear message rather
 than leaving the core half-started.

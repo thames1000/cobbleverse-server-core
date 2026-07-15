@@ -1,6 +1,7 @@
 package com.thamescape.cobbleverse.core.bootstrap;
 
 import com.thamescape.cobbleverse.core.CoreConstants;
+import com.thamescape.cobbleverse.core.api.CobbleverseApiHolder;
 import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.command.CommandRegistrar;
 import com.thamescape.cobbleverse.core.config.ConfigLoader;
@@ -89,10 +90,12 @@ import java.util.List;
  *   <li>Build permission / message services</li>
  *   <li>Open the database and run migrations (backup taken first if migrating an existing db)</li>
  *   <li>Build repositories, audit and player-profile services</li>
- *   <li>Start the scheduler and its tasks</li>
- *   <li>Register + detect integrations</li>
- *   <li>Register health checks</li>
- *   <li>Publish the service registry</li>
+ *   <li>Register + detect integrations; build rewards/currency and the open registries</li>
+ *   <li>Register built-in health checks</li>
+ *   <li>Run developer-API extensions (they populate the registries) — before validation</li>
+ *   <li>Semantically validate config (objective types) against the now-complete registries</li>
+ *   <li>Build season/event/statistics/web services; schedule periodic tasks</li>
+ *   <li>Publish the service registry and the {@code CobbleverseApi} facade</li>
  *   <li>Register commands and the player lifecycle listener</li>
  *   <li>Print the startup report</li>
  * </ol>
@@ -144,49 +147,71 @@ public final class CoreBootstrap {
         RewardService rewardService = buildRewardService(configManager, databaseManager,
                 auditService, currencyService);
 
-        // 5c. Season system. Objective handlers register in the ObjectiveRegistry — manual plus the
-        // event-driven types (0.6.1), which are driven by game events via SeasonObjectiveEventListener.
+        // 5c. Open registries the season system and third-party extensions plug into — built with the
+        // core's built-ins first. Extensions add to them in 5d, before any validation runs.
         ObjectiveRegistry objectiveRegistry = new ObjectiveRegistry();
         objectiveRegistry.register(new ManualObjectiveHandler());
         objectiveRegistry.register(new CaptureSpeciesObjectiveHandler());
         objectiveRegistry.register(new CaptureShinyObjectiveHandler());
         objectiveRegistry.register(new CaptureAnyObjectiveHandler());
         objectiveRegistry.register(new BattleWonObjectiveHandler());
-        // Register the objective-type check as a semantic validator so it runs both now (startup) and on
-        // every /cvcore reload — deferred from load-time validation so custom registry types are honoured
-        // rather than rejected as "unknown", but never allowed to silently degrade on a later reload.
-        configManager.addSemanticValidator(snapshot ->
-                ConfigValidator.validateObjectiveTypes(snapshot.seasons(), objectiveRegistry.types()));
-        configManager.validateSemanticsOrThrow("CV-CONFIG-017");
-        SeasonService seasonService = new SeasonService(configManager, databaseManager,
-                new SeasonRepository(), rewardService, auditService, objectiveRegistry);
-        seasonService.checkLifecycle(); // record initial lifecycle state on boot
-        seasonService.resumePendingMilestones(); // re-deliver milestone rewards a crash left pending
 
-        // 5d. Event system (admin-driven lifecycle in 0.5.0).
-        EventService eventService = new EventService(configManager, databaseManager,
-                new EventRepository(), rewardService, auditService);
-        eventService.resumePendingDistributions(); // resume any reward distribution a crash interrupted
-
-        // 5e. Game-event ingestion bus (producers publish; consumers subscribe — 0.6.0).
+        // Game-event ingestion bus (producers publish; consumers subscribe — 0.6.0). Cobblemon is
+        // optional: only touch the adapter (which imports Cobblemon classes) when the mod is installed.
         GameEventBus gameEventBus = new GameEventBus();
-        // Cobblemon is optional: only touch the adapter (which imports Cobblemon classes) when the mod
-        // is actually installed, so the core loads and runs standalone without it.
-        boolean cobblemonBridgeActive = FabricLoader.getInstance().isModLoaded("cobblemon");
-        if (cobblemonBridgeActive) {
+        if (FabricLoader.getInstance().isModLoaded("cobblemon")) {
             new CobblemonGameEventAdapter(gameEventBus).register();
         } else {
             LOGGER.info("Cobblemon not present; game-event bridge idle");
         }
 
-        // 5f. Bus consumers (0.6.1): season objective auto-progress and player statistics.
+        // Scheduler is initialised now so a health check can observe it; its periodic tasks are
+        // scheduled in 5g once their target services exist.
+        CoreScheduler scheduler = new CoreScheduler();
+        scheduler.init();
+
+        HealthCheckService healthCheckService = new HealthCheckService();
+        healthCheckService.register(new ConfigHealthCheck(configManager));
+        healthCheckService.register(new DatabaseHealthCheck(databaseManager));
+        healthCheckService.register(new SchedulerHealthCheck(scheduler));
+        healthCheckService.register(new PermissionHealthCheck(integrationManager));
+        healthCheckService.register(new IntegrationHealthCheck(integrationManager));
+
+        // 5d. Developer-API extension phase (0.8.0): third-party mods register objective handlers,
+        // game-event listeners, health checks and currency providers here — BEFORE config validation,
+        // so a custom objective type is recognised rather than rejected as unknown. A broken extension
+        // is isolated and logged, never fatal.
+        CoreRegistrar registrar =
+                new CoreRegistrar(objectiveRegistry, gameEventBus, healthCheckService, currencyService);
+        int extensionCount = ExtensionLoader.discoverAndApply(registrar);
+        if (extensionCount > 0) {
+            LOGGER.info("Applied {} cobbleverse extension(s) ({} registration(s))",
+                    extensionCount, registrar.registrations());
+        }
+
+        // 5e. Objective-type validation, now that built-in and extension handlers are all present. Runs
+        // at startup and on every /cvcore reload (deferred from load-time so custom types are honoured).
+        configManager.addSemanticValidator(snapshot ->
+                ConfigValidator.validateObjectiveTypes(snapshot.seasons(), objectiveRegistry.types()));
+        configManager.validateSemanticsOrThrow("CV-CONFIG-017");
+
+        // 5f. Season, event and statistics services (depend on the validated registries).
+        SeasonService seasonService = new SeasonService(configManager, databaseManager,
+                new SeasonRepository(), rewardService, auditService, objectiveRegistry);
+        seasonService.checkLifecycle(); // record initial lifecycle state on boot
+        seasonService.resumePendingMilestones(); // re-deliver milestone rewards a crash left pending
+
+        EventService eventService = new EventService(configManager, databaseManager,
+                new EventRepository(), rewardService, auditService);
+        eventService.resumePendingDistributions(); // resume any reward distribution a crash interrupted
+
         StatisticsService statisticsService = new StatisticsService(databaseManager, new StatisticsRepository());
+
+        // Built-in bus consumers (0.6.1) — registered after any extension listeners from 5d.
         gameEventBus.register(new SeasonObjectiveEventListener(seasonService));
         gameEventBus.register(new StatisticsGameEventListener(statisticsService));
 
-        // 6. Scheduler + periodic tasks.
-        CoreScheduler scheduler = new CoreScheduler();
-        scheduler.init();
+        // 5g. Periodic tasks (their target services now exist).
         scheduler.scheduleRepeating(PlaytimeUpdateTask.ID,
                 (long) dbConfig.playtimeAccrualSeconds * CoreScheduler.TICKS_PER_SECOND,
                 new PlaytimeUpdateTask(playerService));
@@ -196,14 +221,6 @@ public final class CoreBootstrap {
         scheduler.scheduleRepeating(SeasonLifecycleTask.ID,
                 60L * CoreScheduler.TICKS_PER_SECOND, // check season transitions once a minute
                 new SeasonLifecycleTask(seasonService));
-
-        // 7. Register health checks.
-        HealthCheckService healthCheckService = new HealthCheckService();
-        healthCheckService.register(new ConfigHealthCheck(configManager));
-        healthCheckService.register(new DatabaseHealthCheck(databaseManager));
-        healthCheckService.register(new SchedulerHealthCheck(scheduler));
-        healthCheckService.register(new PermissionHealthCheck(integrationManager));
-        healthCheckService.register(new IntegrationHealthCheck(integrationManager));
 
         // 7b. Web integration (0.7.0): read-only HTTP API + outbound webhooks. Both off by default; each
         // is built only when its config section is enabled. The API binds on server start (step 8).
@@ -227,6 +244,10 @@ public final class CoreBootstrap {
                 rewardService, currencyService, seasonService, eventService, gameEventBus,
                 statisticsService, webService);
         CoreServices.install(registry);
+
+        // 9b. Publish the public developer-API facade now that every service exists.
+        CobbleverseApiHolder.install(new CobbleverseApiImpl(seasonService, statisticsService,
+                rewardService, gameEventBus));
 
         // 10. Register commands and player lifecycle.
         CommandRegistrar.register();
