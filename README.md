@@ -1,5 +1,7 @@
 # Cobbleverse Server Core
 
+[![CI](https://github.com/thames1000/cobbleverse-server-core/actions/workflows/ci.yml/badge.svg)](https://github.com/thames1000/cobbleverse-server-core/actions/workflows/ci.yml)
+
 The shared server-side foundation for custom Cobbleverse features. It provides reusable systems —
 configuration, permissions, commands, integrations, messaging, health checks and auditing — that
 future feature modules (seasons, rewards, events, cosmetics, …) build on. The core does **not**
