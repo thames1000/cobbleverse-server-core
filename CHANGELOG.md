@@ -3,6 +3,41 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - Unreleased
+
+Web integration: exposing the data the core already owns (leaderboards, season/event state, player
+stats, health) to the outside world, and pushing notable actions out to other systems. Two independent
+capabilities, **both disabled by default** in `web.json`. No new runtime dependencies — the API uses
+the JDK's built-in HTTP server and webhooks use the JDK HTTP client.
+
+### Added
+- **Read-only HTTP JSON API** (`web/api/`): an embedded JDK `HttpServer` serving
+  `GET /health` (no auth), `GET /api/v1/season`, `/leaderboard`, `/event`, `/player/{uuid}`,
+  `/stats/{uuid}`. **Loopback-bound by default** (`127.0.0.1`) and **API-key protected**
+  (`X-API-Key` or `Authorization: Bearer`, constant-time compared). Read-only (non-GET → 405),
+  with clean JSON error bodies and status codes (400/401/404/405/500). Data access marshals to the
+  DB worker as usual; requests run on a small daemon thread pool. Reachable behind the narrow
+  `ApiData` seam, so the router is unit-tested end-to-end without a database.
+- **Outbound webhooks** (`web/webhook/`): a `WebhookService` attached to the **audit stream** forwards
+  selected audited actions (by `AuditType`, or `"*"`) to configured URLs. Payloads in `generic`
+  (flat JSON) or `discord` (embed) shape. Async delivery via the JDK HTTP client with bounded
+  exponential-backoff retries; a payload that still fails is dead-lettered (`[CV-WEB-001]`) — a missed
+  notification is best-effort, not worth a durable outbox.
+- **Config**: `web.json` (`api` + `webhooks` sections) with strict validation (`[CV-CONFIG-022]`):
+  API key required when enabled, port range, valid http(s) webhook URLs, known audit types, known
+  payload formats, unique webhook names. Fixed at startup (**not** runtime-reloadable, like
+  `database.json`) — changing the bound port or subscriptions needs a restart.
+- **Audit listener hook**: `AuditService.addListener(...)` — every recorded entry is offered to
+  listeners (exception-isolated). This is the seam webhooks consume.
+- `CoreServices.web()` accessor; `/cvcore info` now shows web status (API bind/port, webhook count).
+
+### Notes
+- Webhooks are driven by the audit stream, so `core.json` `enableAuditLog` must be on.
+- The API binds on server start and unbinds on server stop; a bind failure (port in use) logs
+  `[CV-WEB-010]` and leaves the API off rather than aborting the server.
+- Security posture: default loopback bind + mandatory key. Exposing the API off-box is a deliberate
+  edit (`bindAddress`) and should sit behind a reverse proxy with TLS.
+
 ## [0.6.1] - Unreleased
 
 The first real consumers of the game-event bus (0.6.0): event-driven season objectives and player

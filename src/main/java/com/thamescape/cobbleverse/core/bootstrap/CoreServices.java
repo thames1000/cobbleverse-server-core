@@ -105,4 +105,8 @@ public final class CoreServices {
     public static StatisticsService statistics() {
         return registry().statistics();
     }
+
+    public static com.thamescape.cobbleverse.core.web.WebService web() {
+        return registry().web();
+    }
 }

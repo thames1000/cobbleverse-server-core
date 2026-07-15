@@ -83,7 +83,13 @@ Season definitions with objectives and points milestones. The active season is n
 Event definitions (lifecycle-managed activities with participation and completion rewards).
 Runtime-reloadable via `/cvcore reload`. See [events.md](events.md).
 
+## `web.json` (0.7.0)
+
+Web-integration config: the read-only HTTP API (`api`) and outbound webhooks (`webhooks`). Both
+disabled by default. Fixed at startup and **not** runtime-reloadable (like `database.json`) — changing
+the bound port or subscriptions requires a restart. See [web-integration.md](web-integration.md).
+
 ## Planned files
 
-Later versions add `permissions.json`, `scheduler.json`, `integrations.json` and `web-api.json`, each
-following the same versioned, strictly validated pattern.
+Later versions add `permissions.json`, `scheduler.json` and `integrations.json`, each following the
+same versioned, strictly validated pattern.

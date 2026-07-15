@@ -30,6 +30,8 @@ public final class AuditService {
     private final AuditRepository repository;
     private final Deque<AuditEntry> recent = new ConcurrentLinkedDeque<>();
     private final AtomicInteger size = new AtomicInteger();
+    private final List<java.util.function.Consumer<AuditEntry>> listeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /** In-memory only (no persistence). */
     public AuditService(boolean enabled) {
@@ -56,6 +58,26 @@ public final class AuditService {
         }
         log(entry);
         persist(entry);
+        notifyListeners(entry);
+    }
+
+    /**
+     * Registers a listener notified of every recorded entry (used by the webhook service to forward
+     * selected audited actions). Listeners run synchronously on the recording thread, so they must not
+     * block — do any I/O off-thread. A listener that throws is isolated and logged, never propagated.
+     */
+    public void addListener(java.util.function.Consumer<AuditEntry> listener) {
+        listeners.add(listener);
+    }
+
+    private void notifyListeners(AuditEntry entry) {
+        for (java.util.function.Consumer<AuditEntry> listener : listeners) {
+            try {
+                listener.accept(entry);
+            } catch (RuntimeException e) {
+                LOGGER.warn("Audit listener failed for {}: {}", entry.action(), e.toString());
+            }
+        }
     }
 
     private void persist(AuditEntry entry) {

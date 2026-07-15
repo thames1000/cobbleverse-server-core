@@ -10,5 +10,6 @@ public record ConfigSnapshot(
         DatabaseConfig database,
         RewardsConfig rewards,
         SeasonsConfig seasons,
-        EventsConfig events) {
+        EventsConfig events,
+        WebConfig web) {
 }
