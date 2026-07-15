@@ -25,6 +25,9 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | op 4 | Adjust points (may be negative) |
 | `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | op 4 | Add objective progress |
 | `/cvcore season top [n]` | `cobbleverse.admin.season`  | op 4       | Season points leaderboard           |
+| `/cvcore season rewards pending` | `cobbleverse.admin.season` | op 4 | List milestone rewards still owed (durable outbox) |
+| `/cvcore season rewards retry` | `cobbleverse.admin.season` | op 4 | Re-attempt delivery of all pending milestone rewards |
+| `/cvcore season rewards abandon <id>` | `cobbleverse.admin.season` | op 4 | Drop a permanently-undeliverable milestone reward |
 | `/cvcore event list`   | `cobbleverse.admin.events`   | op 4       | List events + state                 |
 | `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | op 4 | Drive event lifecycle |
 | `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | op 4 | Add a participant from console |

@@ -82,7 +82,16 @@ the read-and-write is atomic.
 next milestone).
 
 **Admins:** `/cvcore season info`, `/cvcore season progress <player>`,
-`/cvcore season addpoints <player> <amount>`, `/cvcore season objective <player> <objective> <amount>`.
+`/cvcore season addpoints <player> <amount>`, `/cvcore season objective <player> <objective> <amount>`,
+`/cvcore season top [count]`.
+
+**Milestone-reward recovery** (the durable outbox, see below):
+
+- `/cvcore season rewards pending` — list every milestone reward still owed (with its `#id`).
+- `/cvcore season rewards retry` — re-attempt delivery of all pending rewards (same path as startup).
+- `/cvcore season rewards abandon <id>` — drop a permanently-undeliverable entry (e.g. a reward id that
+  was removed from config) so it stops retrying every startup. The player does **not** receive it; the
+  action is audited.
 
 ## Storage (migration V004)
 
@@ -117,10 +126,17 @@ admins. Set the objective `type` and its matcher fields:
 
 Auto-progress only counts while the season is **ACTIVE**. Wild captures do **not** count toward
 `battle_won` (they'd double-count with capture objectives). Types are data-driven and matched by
-registered handlers — adding a new type means registering an `ObjectiveHandler`, no central switch:
-`CoreServices.seasons().objectiveRegistry().register(handler)`. Config validation confirms each
-objective `type` against the **live registry** at startup (so your custom types are accepted, while
-typos and unhandled types still fail fast), rather than a closed built-in list.
+registered `ObjectiveHandler`s in the `ObjectiveRegistry` — there is no central switch. Config
+validation confirms each objective `type` against the **live registry** (not a closed built-in list),
+both at startup and on every `/cvcore reload`, so an unhandled type fails fast instead of silently
+never matching.
+
+> **Custom handlers (developer API — planned for 1.0):** the registry is the intended extension point
+> for third-party objective types, and its validation is already registry-driven. However, a public
+> registration surface that lets an external mod register a handler *before* startup validation runs
+> (a service-loader or init entrypoint) is **not exposed yet** — today the registry holds only the
+> core's built-in handlers. If you're building on this, track the 1.0 developer API rather than relying
+> on registration ordering now.
 
 Since capture events aren't wired to real gameplay until you verify Cobblemon (0.6.0), test objective
 auto-progress now with `/cvcore debug publish capture <player> <species> [shiny]`.

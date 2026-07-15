@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Owns the live configuration and mediates loads and safe reloads.
@@ -28,10 +29,40 @@ public final class ConfigManager {
     private static final String EVENTS_FILE = "events.json";
 
     private final ConfigLoader loader;
+    private final List<SnapshotValidator> semanticValidators = new CopyOnWriteArrayList<>();
     private volatile ConfigSnapshot live;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
+    }
+
+    /**
+     * Registers a semantic validator that runs — in addition to structural validation — against every
+     * candidate generation before it is published, both at startup ({@link #validateSemanticsOrThrow})
+     * and on every {@link #reload()}. Lets a subsystem reject config that structural validation cannot
+     * judge (e.g. an objective type with no registered handler), so a reload can't silently reintroduce
+     * a broken generation. Validators are typically registered once the runtime state they consult
+     * (registries, providers) exists.
+     */
+    public void addSemanticValidator(SnapshotValidator validator) {
+        semanticValidators.add(validator);
+    }
+
+    /**
+     * Runs every registered semantic validator against the live snapshot and throws if any reports a
+     * problem. Called at startup once subsystems have registered their validators, so semantic breakage
+     * fails fast exactly as structural {@link #load()} validation does.
+     */
+    public void validateSemanticsOrThrow(String code) {
+        throwIfInvalid(code, "configuration semantics", runSemanticValidators(live()));
+    }
+
+    private List<String> runSemanticValidators(ConfigSnapshot candidate) {
+        List<String> problems = new ArrayList<>();
+        for (SnapshotValidator validator : semanticValidators) {
+            problems.addAll(validator.validate(candidate));
+        }
+        return problems;
     }
 
     /** Loads and validates all config from disk, then publishes it as one snapshot. Throws if invalid. */
@@ -82,16 +113,22 @@ public final class ConfigManager {
         if (problems.isEmpty()) {
             problems.addAll(ConfigValidator.validateCrossReferences(rewards, seasons, events));
         }
-        if (!problems.isEmpty()) {
-            LOGGER.warn("Reload rejected; keeping previous config in full. {} problem(s).", problems.size());
-            return problems;
+        if (problems.isEmpty()) {
+            // Structural checks passed. Backfill ids, assemble the candidate generation, and let the
+            // semantic validators (e.g. objective types vs the live registry) judge it before publish —
+            // otherwise a reload could reintroduce the silent-degradation the startup check prevents.
+            backfillIds(rewards, seasons, events);
+            ConfigSnapshot candidate = new ConfigSnapshot(core, current.database(), rewards, seasons, events);
+            problems.addAll(runSemanticValidators(candidate));
+            if (problems.isEmpty()) {
+                // Single atomic publication: one volatile write swaps the entire config generation.
+                this.live = candidate;
+                LOGGER.info("Reloaded configuration (rewards={}, seasons={}, events={})",
+                        rewards.definitions.size(), seasons.seasons.size(), events.events.size());
+                return problems;
+            }
         }
-
-        backfillIds(rewards, seasons, events);
-        // Single atomic publication: one volatile write swaps the entire config generation.
-        this.live = new ConfigSnapshot(core, current.database(), rewards, seasons, events);
-        LOGGER.info("Reloaded configuration (rewards={}, seasons={}, events={})",
-                rewards.definitions.size(), seasons.seasons.size(), events.events.size());
+        LOGGER.warn("Reload rejected; keeping previous config in full. {} problem(s).", problems.size());
         return problems;
     }
 

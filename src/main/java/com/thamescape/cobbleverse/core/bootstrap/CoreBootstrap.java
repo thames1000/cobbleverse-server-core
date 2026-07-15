@@ -144,15 +144,12 @@ public final class CoreBootstrap {
         objectiveRegistry.register(new CaptureShinyObjectiveHandler());
         objectiveRegistry.register(new CaptureAnyObjectiveHandler());
         objectiveRegistry.register(new BattleWonObjectiveHandler());
-        // Now that every handler (built-in and any a dependent module registered) is present, confirm
-        // every configured objective type actually has a handler — deferred from load-time validation
-        // so custom registry types are honoured rather than rejected as "unknown".
-        List<String> unknownTypes = ConfigValidator.validateObjectiveTypes(
-                configManager.seasons(), objectiveRegistry.types());
-        if (!unknownTypes.isEmpty()) {
-            throw new IllegalStateException(
-                    "[CV-CONFIG-017] Unhandled season objective types: " + String.join("; ", unknownTypes));
-        }
+        // Register the objective-type check as a semantic validator so it runs both now (startup) and on
+        // every /cvcore reload — deferred from load-time validation so custom registry types are honoured
+        // rather than rejected as "unknown", but never allowed to silently degrade on a later reload.
+        configManager.addSemanticValidator(snapshot ->
+                ConfigValidator.validateObjectiveTypes(snapshot.seasons(), objectiveRegistry.types()));
+        configManager.validateSemanticsOrThrow("CV-CONFIG-017");
         SeasonService seasonService = new SeasonService(configManager, databaseManager,
                 new SeasonRepository(), rewardService, auditService, objectiveRegistry);
         seasonService.checkLifecycle(); // record initial lifecycle state on boot

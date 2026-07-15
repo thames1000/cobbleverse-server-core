@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -196,8 +197,9 @@ public final class SeasonService {
         }
         long now = System.currentTimeMillis();
         db.supplyAsync(conn -> {
-            boolean[] anyMilestone = {false};
+            List<CompletedObjective> completed = new ArrayList<>();
             TransactionManager.execute(conn, c -> {
+                completed.clear(); // guard against any partial fill if the body is re-entered
                 for (ObjectiveMatch match : matches) {
                     ObjectiveDefinition objective = def.objective(match.objectiveId()).orElse(null);
                     if (objective == null) {
@@ -205,12 +207,17 @@ public final class SeasonService {
                     }
                     ObjectiveTxn txn = applyObjectiveOnConn(c, uuid, seasonId, def, objective, match.amount(), now);
                     if (txn.status() == ObjectiveResult.Status.COMPLETED) {
-                        auditCompletion(uuid, seasonId, objective.id, txn);
-                        anyMilestone[0] |= txn.milestoneRecorded();
+                        completed.add(new CompletedObjective(objective.id, txn));
                     }
                 }
             });
-            return anyMilestone[0];
+            // The transaction committed: only now is it truthful to record completion audits and logs.
+            boolean anyMilestone = false;
+            for (CompletedObjective c : completed) {
+                auditCompletion(uuid, seasonId, c.objectiveId(), c.txn());
+                anyMilestone |= c.txn().milestoneRecorded();
+            }
+            return anyMilestone;
         }).thenAccept(anyMilestone -> {
             if (anyMilestone) {
                 deliverPendingMilestonesOnServerThread(uuid);
@@ -301,6 +308,26 @@ public final class SeasonService {
         return pending.size();
     }
 
+    /** Every milestone reward still owed across all players (the durable outbox). For admin inspection. */
+    public List<SeasonRepository.PendingMilestone> listPendingMilestones() {
+        return db.callSync(repository::allPendingMilestones);
+    }
+
+    /**
+     * Explicitly drops a single pending milestone reward from the outbox without delivering it — for an
+     * admin abandoning an entry that can never be delivered (e.g. a reward id removed from config). The
+     * player does not receive it. Returns true if a row was removed.
+     */
+    public boolean abandonPendingMilestone(long id, String actor) {
+        boolean removed = db.callSync(conn -> repository.deletePendingMilestone(conn, id)) > 0;
+        if (removed) {
+            audit.record(AuditEntry.builder(AuditType.ADMIN_COMMAND)
+                    .source(actor).context("season reward abandon: pending #" + id));
+            LOGGER.info("Abandoned pending milestone reward #{} ({})", id, actor);
+        }
+        return removed;
+    }
+
     private void deliverOne(SeasonRepository.PendingMilestone pending) {
         RewardResult result = rewards.grant(pending.uuid(), pending.rewardId(), "season:" + pending.seasonId());
         if (result.status() == RewardStatus.SUCCESS || result.status() == RewardStatus.QUEUED
@@ -323,6 +350,10 @@ public final class SeasonService {
 
     private record ObjectiveTxn(ObjectiveResult.Status status, int progress, boolean completed,
                                 int oldPoints, int newPoints, boolean milestoneRecorded) {
+    }
+
+    /** A completion observed inside a transaction, held until the transaction commits so its audit is truthful. */
+    private record CompletedObjective(String objectiveId, ObjectiveTxn txn) {
     }
 
     // --- Lifecycle --------------------------------------------------------------------------------

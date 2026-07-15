@@ -25,6 +25,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Exercises the season lifecycle that 0.4.0 must prove: objective progress → completion → points →
@@ -139,6 +141,31 @@ class SeasonServiceTest {
             assertEquals(0, seasons.resumePendingMilestones(), "nothing left to resume");
             long queuedFinal = db.callSync(rewardRepo::queueCount);
             assertEquals(1L, queuedFinal, "no double delivery");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void abandoningAPendingRewardDropsItWithoutDelivery() throws IOException {
+        DatabaseManager db = openDb();
+        SeasonService seasons = seasonService(config("test_season", activeSeasonJson()), db);
+        SeasonRepository seasonRepo = new SeasonRepository();
+        RewardRepository rewardRepo = new RewardRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            long now = System.currentTimeMillis();
+            db.runSync(conn -> seasonRepo.insertPendingMilestone(conn, uuid, "test_season", "sample_tier_1", now));
+            long id = db.callSync(seasonRepo::allPendingMilestones).get(0).id();
+
+            assertTrue(seasons.abandonPendingMilestone(id, "admin:test"), "an existing entry is abandoned");
+            int pending = db.callSync(conn -> seasonRepo.pendingMilestones(conn, uuid).size());
+            assertEquals(0, pending, "the abandoned entry is gone from the outbox");
+            long queued = db.callSync(rewardRepo::queueCount);
+            assertEquals(0L, queued, "an abandoned reward is never delivered");
+
+            // Abandoning a non-existent id is a no-op that reports false.
+            assertFalse(seasons.abandonPendingMilestone(id, "admin:test"), "a missing entry reports not-found");
         } finally {
             db.close();
         }

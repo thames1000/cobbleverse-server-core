@@ -161,11 +161,12 @@ public final class SeasonRepository {
         }
     }
 
-    public void deletePendingMilestone(Connection conn, long id) throws SQLException {
+    /** Deletes a pending row by id; returns the number of rows removed (0 if the id was not present). */
+    public int deletePendingMilestone(Connection conn, long id) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "DELETE FROM pending_milestone_rewards WHERE id = ?")) {
             ps.setLong(1, id);
-            ps.executeUpdate();
+            return ps.executeUpdate();
         }
     }
 

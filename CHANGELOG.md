@@ -42,18 +42,35 @@ statistics. Both are exercisable end-to-end with `/cvcore debug publish` — no 
   (run at startup) re-delivers anything left pending, exactly once. Async completions marshal delivery
   back onto the server thread; if none is available the reward stays pending for the next startup.
 - **Objective-type validation no longer closes the extension point**: type existence is confirmed
-  against the live `ObjectiveRegistry` at startup (built-ins plus any a module registered via
-  `CoreServices.seasons().objectiveRegistry().register(...)`), not the closed `ObjectiveType` enum.
-  Custom types are honoured; typos and unhandled types still fail fast (`[CV-CONFIG-017]`). The enum
-  now only drives built-in matcher-field checks.
+  against the live `ObjectiveRegistry` at startup, not the closed `ObjectiveType` enum. Custom types
+  are honoured; typos and unhandled types still fail fast (`[CV-CONFIG-017]`). The enum now only drives
+  built-in matcher-field checks.
 - **Async objective-progress failures keep stack traces** (log the throwable, not just its message).
 - **Non-blocking test hardened** against a race: it now waits until the DB worker has actually picked
   up the blocking task before timing `onGameEvent`, so it measures against a genuinely busy worker.
+
+### Fixed (from PR review, round 3)
+- **`/cvcore reload` now runs registry-aware objective-type validation**: `ConfigManager` gained a
+  semantic-validation hook (`addSemanticValidator`) that runs against every candidate generation before
+  publication, on both startup and reload. The objective-type check is registered there, so a reload
+  that introduces an objective type with no registered handler is rejected (previous config kept in
+  full) instead of silently accepting an objective that never progresses.
+- **Async completion audits are emitted only after the transaction commits**: `advanceObjectivesAsync`
+  now collects completion facts inside the transaction and records the "objective completed" /
+  "points changed" audit entries (and logs) after `TransactionManager.execute` returns. A rolled-back
+  transaction can no longer leave audit entries claiming changes that never committed.
+- **Milestone-reward outbox is now operable**: `/cvcore season rewards pending` lists owed grants,
+  `… retry` re-attempts delivery, and `… abandon <id>` drops a permanently-undeliverable entry so it
+  stops retrying every startup. (`SeasonService.listPendingMilestones` / `abandonPendingMilestone`.)
 
 ### Notes
 - Objective types are data-driven (config `type` + fields), matched by registered handlers; the
   `ObjectiveRegistry` is the authority for which types exist, and the `ObjectiveType` enum only drives
   built-in matcher-field validation.
+- **Custom objective handlers**: the registry and its now reload-aware validation are the mechanism for
+  third-party objective types, but a public registration surface for external mods (a service-loader /
+  entrypoint that runs *before* startup validation) is deferred to the 1.0 developer API. Today the
+  registry is populated only by the core's built-in handlers.
 - Season objective auto-progress only counts while the season is ACTIVE (existing gate).
 
 ## [0.6.0] - Unreleased

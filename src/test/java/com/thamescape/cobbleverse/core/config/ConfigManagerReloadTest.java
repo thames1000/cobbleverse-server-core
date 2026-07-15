@@ -40,6 +40,37 @@ class ConfigManagerReloadTest {
     }
 
     @Test
+    void reloadRejectsObjectiveTypeWithNoRegisteredHandler() throws IOException {
+        ConfigManager config = new ConfigManager(new ConfigLoader(tmp));
+        config.load();
+        // Simulate the objective registry knowing only the built-in 'manual' handler.
+        config.addSemanticValidator(snapshot ->
+                ConfigValidator.validateObjectiveTypes(snapshot.seasons(), java.util.Set.of("manual")));
+
+        // Structurally valid, but its objective type has no registered handler — the exact silent-
+        // degradation the startup check prevents, now caught on reload too.
+        Files.writeString(tmp.resolve("seasons.json"), seasonJson("capture_shiny"), StandardCharsets.UTF_8);
+        List<String> problems = config.reload();
+        assertFalse(problems.isEmpty(), "an unregistered objective type must fail the reload");
+        assertFalse(config.seasons().seasons.containsKey("reload_season"),
+                "a semantically rejected reload keeps the previous seasons config in full");
+
+        // Switching to a registered type reloads cleanly.
+        Files.writeString(tmp.resolve("seasons.json"), seasonJson("manual"), StandardCharsets.UTF_8);
+        assertTrue(config.reload().isEmpty(), "a registered objective type reloads cleanly");
+        assertTrue(config.seasons().seasons.containsKey("reload_season"),
+                "the accepted generation is now live");
+    }
+
+    private static String seasonJson(String objectiveType) {
+        return "{\"configVersion\":1,\"seasons\":{\"reload_season\":{"
+                + "\"displayName\":\"Reload\",\"enabled\":true,"
+                + "\"startsAt\":\"2026-01-01T00:00:00Z\",\"endsAt\":\"2026-12-31T00:00:00Z\","
+                + "\"objectives\":[{\"id\":\"obj1\",\"type\":\"" + objectiveType + "\",\"required\":3,\"points\":10}],"
+                + "\"milestones\":[]}}}";
+    }
+
+    @Test
     void successfulReloadPublishesOneNewSnapshotAndKeepsDatabase() throws IOException {
         ConfigManager config = new ConfigManager(new ConfigLoader(tmp));
         config.load();
