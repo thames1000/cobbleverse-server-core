@@ -55,11 +55,15 @@ audited (`SEASON_CHANGED`).
    another module calling `SeasonService.addObjectiveProgress`). Progress only counts while the season
    is **ACTIVE** (otherwise the call returns `SEASON_NOT_ACTIVE` and awards nothing), and is clamped to
    `[0, required]`.
-2. On **completion**, the objective is marked complete **and** its `points` are awarded in a single
-   transaction (a crash can't leave one without the other). Further progress is a no-op.
-3. Awarding points that **cross a milestone** grants that milestone's reward via the central
-   `RewardService` — so it dedups (claim-once) and queues if the player is offline. Milestone grants
-   are idempotent, so they're safe to re-reach.
+2. On **completion**, the objective is marked complete, its `points` are awarded, **and** an owed
+   record for every milestone the points cross is written to a durable outbox
+   (`pending_milestone_rewards`) — all in a single transaction, so a crash can't leave any of them out
+   of step. Further progress is a no-op.
+3. Those owed rewards are then **delivered from the outbox**: each is granted via the central
+   `RewardService` (dedups claim-once, queues if the player is offline) and its outbox row is deleted
+   once the grant is accepted. Anything left pending by a crash is re-delivered on the next startup
+   (`SeasonService.resumePendingMilestones`), exactly once. Async completions (event-driven) marshal
+   delivery back onto the server thread. Milestone grants are idempotent, so they're safe to re-reach.
 
 Points can be adjusted directly by admins (`/cvcore season addpoints`, may be negative; clamped at 0);
 the read-and-write is atomic.
@@ -83,13 +87,15 @@ next milestone).
 ## Storage (migration V004)
 
 ```
-season_progress    (uuid, season_id, points)                         PK(uuid, season_id)
-objective_progress (uuid, season_id, objective_id, progress, completed)  PK(uuid, season_id, objective_id)
-season_lifecycle   (season_id, state, updated_at)                    PK(season_id)
+season_progress          (uuid, season_id, points)                              PK(uuid, season_id)
+objective_progress       (uuid, season_id, objective_id, progress, completed)   PK(uuid, season_id, objective_id)
+season_lifecycle         (season_id, state, updated_at)                         PK(season_id)
+pending_milestone_rewards (id, uuid, season_id, reward_id, created_at)          UNIQUE(uuid, season_id, reward_id)  -- V008 outbox
 ```
 
 Milestone reward claims live in the reward tables (`reward_claims`), so a milestone is granted once
-per player automatically.
+per player automatically. The `pending_milestone_rewards` outbox (migration `V008`) holds owed grants
+between the transaction that crosses a milestone and their delivery, so a crash can't lose one.
 
 ## Event-driven objectives (0.6.1)
 
@@ -112,7 +118,9 @@ admins. Set the objective `type` and its matcher fields:
 Auto-progress only counts while the season is **ACTIVE**. Wild captures do **not** count toward
 `battle_won` (they'd double-count with capture objectives). Types are data-driven and matched by
 registered handlers — adding a new type means registering an `ObjectiveHandler`, no central switch:
-`CoreServices.seasons().objectiveRegistry().register(handler)`.
+`CoreServices.seasons().objectiveRegistry().register(handler)`. Config validation confirms each
+objective `type` against the **live registry** at startup (so your custom types are accepted, while
+typos and unhandled types still fail fast), rather than a closed built-in list.
 
 Since capture events aren't wired to real gameplay until you verify Cobblemon (0.6.0), test objective
 auto-progress now with `/cvcore debug publish capture <player> <species> [shiny]`.

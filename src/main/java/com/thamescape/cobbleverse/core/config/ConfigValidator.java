@@ -198,13 +198,24 @@ public final class ConfigValidator {
 
     private static final java.util.Set<String> BATTLE_KINDS = java.util.Set.of("pvp", "pvn", "pvw");
 
-    /** Validates a season objective's {@code type} and the matcher fields that type requires. */
+    /**
+     * Validates a season objective's {@code type} and the matcher fields that type requires. Only the
+     * built-in types are matcher-checked here; a non-built-in type is left for
+     * {@link #validateObjectiveTypes(SeasonsConfig, java.util.Set)} to confirm against the live
+     * objective registry, so modules can register their own types without this rejecting them.
+     */
     private static List<String> validateObjectiveType(
             String where, com.thamescape.cobbleverse.core.season.ObjectiveDefinition objective) {
         List<String> problems = new ArrayList<>();
+        if (isBlank(objective.type)) {
+            problems.add(where + ": objective type must not be blank");
+            return problems;
+        }
         var type = com.thamescape.cobbleverse.core.season.objective.ObjectiveType.fromId(objective.type);
         if (type.isEmpty()) {
-            problems.add(where + ": unknown objective type '" + objective.type + "'");
+            // Not a built-in type. A module may supply it via the objective registry; the registry
+            // pass at startup fails fast if it is genuinely unknown. Matcher-field requirements are the
+            // built-in type's concern, so there is nothing more to check for a custom type here.
             return problems;
         }
         switch (type.get()) {
@@ -222,6 +233,36 @@ public final class ConfigValidator {
             }
             default -> {
                 // manual / capture_shiny / capture_any need no matcher fields.
+            }
+        }
+        return problems;
+    }
+
+    /**
+     * Confirms every configured objective {@code type} has a registered handler. Run at startup once
+     * all modules have registered into the objective registry (built-ins plus any registered via
+     * {@code CoreServices.seasons().objectiveRegistry().register(...)}), so custom types are honoured
+     * while a typo'd or unhandled type still fails fast. {@code knownTypes} is the registry's key set.
+     */
+    public static List<String> validateObjectiveTypes(SeasonsConfig config, java.util.Set<String> knownTypes) {
+        List<String> problems = new ArrayList<>();
+        if (config == null || config.seasons == null) {
+            return problems;
+        }
+        for (var entry : config.seasons.entrySet()) {
+            var season = entry.getValue();
+            if (season == null || season.objectives == null) {
+                continue;
+            }
+            for (var objective : season.objectives) {
+                if (objective == null || isBlank(objective.type)) {
+                    continue;
+                }
+                String type = objective.type.trim().toLowerCase(java.util.Locale.ROOT);
+                if (!knownTypes.contains(type)) {
+                    problems.add("seasons.json: season '" + entry.getKey() + "' objective '" + objective.id
+                            + "': no handler registered for objective type '" + objective.type + "'");
+                }
             }
         }
         return problems;

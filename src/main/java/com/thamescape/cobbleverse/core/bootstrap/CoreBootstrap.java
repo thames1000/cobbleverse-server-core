@@ -5,6 +5,7 @@ import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.command.CommandRegistrar;
 import com.thamescape.cobbleverse.core.config.ConfigLoader;
 import com.thamescape.cobbleverse.core.config.ConfigManager;
+import com.thamescape.cobbleverse.core.config.ConfigValidator;
 import com.thamescape.cobbleverse.core.config.CoreConfig;
 import com.thamescape.cobbleverse.core.config.DatabaseConfig;
 import com.thamescape.cobbleverse.core.diagnostics.ConfigHealthCheck;
@@ -143,9 +144,19 @@ public final class CoreBootstrap {
         objectiveRegistry.register(new CaptureShinyObjectiveHandler());
         objectiveRegistry.register(new CaptureAnyObjectiveHandler());
         objectiveRegistry.register(new BattleWonObjectiveHandler());
+        // Now that every handler (built-in and any a dependent module registered) is present, confirm
+        // every configured objective type actually has a handler — deferred from load-time validation
+        // so custom registry types are honoured rather than rejected as "unknown".
+        List<String> unknownTypes = ConfigValidator.validateObjectiveTypes(
+                configManager.seasons(), objectiveRegistry.types());
+        if (!unknownTypes.isEmpty()) {
+            throw new IllegalStateException(
+                    "[CV-CONFIG-017] Unhandled season objective types: " + String.join("; ", unknownTypes));
+        }
         SeasonService seasonService = new SeasonService(configManager, databaseManager,
                 new SeasonRepository(), rewardService, auditService, objectiveRegistry);
         seasonService.checkLifecycle(); // record initial lifecycle state on boot
+        seasonService.resumePendingMilestones(); // re-deliver milestone rewards a crash left pending
 
         // 5d. Event system (admin-driven lifecycle in 0.5.0).
         EventService eventService = new EventService(configManager, databaseManager,

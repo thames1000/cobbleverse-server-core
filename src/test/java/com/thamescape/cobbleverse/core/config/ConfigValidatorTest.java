@@ -78,11 +78,39 @@ class ConfigValidatorTest {
         assertFalse(ConfigValidator.validate(config).isEmpty(), "endsAt before startsAt must be flagged");
     }
 
+    // The five built-in objective handlers the core always registers.
+    private static final java.util.Set<String> BUILT_IN_TYPES = java.util.Set.of(
+            "manual", "capture_species", "capture_shiny", "capture_any", "battle_won");
+
     @Test
-    void unknownObjectiveTypeIsRejected() {
+    void unknownObjectiveTypeIsRejectedByTheRegistryPass() {
         SeasonsConfig config = SeasonsConfig.defaults();
         config.seasons.get("sample_season").objectives.get(0).type = "caputre_shiny"; // typo
-        assertFalse(ConfigValidator.validate(config).isEmpty(), "a misspelled objective type must be flagged");
+        // Load-time validation defers unknown types (a module may register them); the registry pass,
+        // run once handlers are known, is what fails a type nothing handles.
+        assertFalse(ConfigValidator.validateObjectiveTypes(config, BUILT_IN_TYPES).isEmpty(),
+                "a misspelled objective type must be flagged against the registry");
+    }
+
+    @Test
+    void blankObjectiveTypeIsRejectedAtLoad() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        config.seasons.get("sample_season").objectives.get(0).type = "  ";
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "a blank objective type must be flagged");
+    }
+
+    @Test
+    void customRegisteredObjectiveTypeIsAccepted() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        config.seasons.get("sample_season").objectives.get(0).type = "weekly_login";
+        // A type the core doesn't ship passes load-time validation (no matcher rules to break)...
+        assertTrue(ConfigValidator.validate(config).isEmpty(),
+                "a custom objective type must not be rejected at load");
+        // ...and the registry pass accepts it once its module has registered a handler.
+        var known = new java.util.HashSet<>(BUILT_IN_TYPES);
+        known.add("weekly_login");
+        assertTrue(ConfigValidator.validateObjectiveTypes(config, known).isEmpty(),
+                "a registered custom objective type must be accepted");
     }
 
     @Test

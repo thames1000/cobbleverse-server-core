@@ -98,6 +98,53 @@ class SeasonServiceTest {
     }
 
     @Test
+    void deliveredMilestoneRewardLeavesNothingPending() throws IOException {
+        DatabaseManager db = openDb();
+        SeasonService seasons = seasonService(config("test_season", activeSeasonJson()), db);
+        SeasonRepository seasonRepo = new SeasonRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            seasons.addObjectiveProgress(uuid, "test_season", "obj1", 3);
+            // The reward was delivered (queued) from the outbox, so its pending row is gone.
+            int pending = db.callSync(conn -> seasonRepo.pendingMilestones(conn, uuid).size());
+            assertEquals(0, pending, "an accepted milestone reward must not stay in the outbox");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void crashedMilestoneRewardIsRedeliveredOnResume() throws IOException {
+        DatabaseManager db = openDb();
+        SeasonService seasons = seasonService(config("test_season", activeSeasonJson()), db);
+        SeasonRepository seasonRepo = new SeasonRepository();
+        RewardRepository rewardRepo = new RewardRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            // Simulate a crash: the milestone's pending reward record is committed, but delivery never
+            // ran (as if the process died right after the transaction).
+            long now = System.currentTimeMillis();
+            db.runSync(conn -> seasonRepo.insertPendingMilestone(conn, uuid, "test_season", "sample_tier_1", now));
+            long queuedBefore = db.callSync(rewardRepo::queueCount);
+            assertEquals(0L, queuedBefore, "nothing delivered before resume");
+
+            // Startup resume re-delivers it exactly once and clears the outbox.
+            assertEquals(1, seasons.resumePendingMilestones(), "the pending reward is resumed");
+            long queuedAfter = db.callSync(rewardRepo::queueCount);
+            assertEquals(1L, queuedAfter, "the resumed reward is now queued");
+            int pendingAfter = db.callSync(conn -> seasonRepo.pendingMilestones(conn, uuid).size());
+            assertEquals(0, pendingAfter, "the outbox is cleared after delivery");
+
+            // A second resume is a no-op: the reward is not granted twice.
+            assertEquals(0, seasons.resumePendingMilestones(), "nothing left to resume");
+            long queuedFinal = db.callSync(rewardRepo::queueCount);
+            assertEquals(1L, queuedFinal, "no double delivery");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
     void partialProgressThenCompletion() throws IOException {
         DatabaseManager db = openDb();
         SeasonService seasons = seasonService(config("test_season", activeSeasonJson()), db);

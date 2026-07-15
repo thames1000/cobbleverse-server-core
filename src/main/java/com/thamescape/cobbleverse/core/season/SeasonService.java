@@ -7,7 +7,9 @@ import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
 import com.thamescape.cobbleverse.core.persistence.TransactionManager;
 import com.thamescape.cobbleverse.core.persistence.repository.SeasonRepository;
+import com.thamescape.cobbleverse.core.reward.RewardResult;
 import com.thamescape.cobbleverse.core.reward.RewardService;
+import com.thamescape.cobbleverse.core.reward.RewardStatus;
 import com.thamescape.cobbleverse.core.season.objective.ObjectiveRegistry;
 import com.thamescape.cobbleverse.core.util.ServerHolder;
 import net.minecraft.server.MinecraftServer;
@@ -17,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -123,33 +124,32 @@ public final class SeasonService {
     }
 
     /**
-     * Adds season points (which may be negative to correct a mistake, clamped at zero) and grants any
-     * milestones newly crossed. The read-and-write is one transaction, so the total is never lost or
-     * doubled by a concurrent change. Returns the new total.
+     * Adds season points (may be negative to correct a mistake, clamped at zero). The points change
+     * and any newly-crossed milestone's <b>pending reward record</b> are written in one transaction;
+     * the reward is then delivered from the durable outbox. Called from the admin command (server
+     * thread), so delivery is inline. Returns the new total.
      */
     public int addPoints(UUID uuid, String seasonId, int delta, String reason) {
+        long now = System.currentTimeMillis();
+        SeasonDefinition def = definition(seasonId).orElse(null);
         int[] change = db.callInTransaction(conn -> {
             int old = repository.points(conn, uuid, seasonId);
             int updated = Math.max(0, old + delta);
             repository.setPoints(conn, uuid, seasonId, updated);
+            recordCrossedMilestones(conn, uuid, seasonId, def, old, updated, now);
             return new int[]{old, updated};
         });
         audit.record(AuditEntry.builder(AuditType.SEASON_POINTS_CHANGED)
                 .target(uuid).source(reason).context(seasonId + ": " + change[0] + " -> " + change[1]));
-        // addPoints is called from the admin command (server thread), so granting inline is safe.
-        definition(seasonId).ifPresent(def -> {
-            for (String rewardId : collectCrossedMilestones(def, change[0], change[1])) {
-                rewards.grant(uuid, rewardId, "season:" + seasonId);
-            }
-        });
+        deliverPendingMilestones(uuid);
         return change[1];
     }
 
     /**
-     * Adds progress to an objective. Progress only counts while the season is ACTIVE. Progress is
-     * clamped to {@code [0, required]}. On completion, the objective is marked complete <b>and</b> its
-     * points are awarded in a single transaction (so a crash can't leave one without the other);
-     * milestone rewards are then granted (idempotently). No-op if already complete.
+     * Adds progress to an objective. Progress only counts while the season is ACTIVE and is clamped to
+     * {@code [0, required]}. On completion the objective, its points, and any crossed milestone's
+     * pending reward record are written in one transaction; the reward is then delivered from the
+     * durable outbox. No-op if already complete. Called from the admin command (server thread).
      */
     public ObjectiveResult addObjectiveProgress(UUID uuid, String seasonId, String objectiveId, int amount) {
         Optional<SeasonDefinition> def = definition(seasonId);
@@ -164,13 +164,13 @@ public final class SeasonService {
             return new ObjectiveResult(ObjectiveResult.Status.SEASON_NOT_ACTIVE, 0, false);
         }
 
+        long now = System.currentTimeMillis();
         ObjectiveTxn txn = db.callInTransaction(conn ->
-                applyObjectiveOnConn(conn, uuid, seasonId, objective.get(), amount));
+                applyObjectiveOnConn(conn, uuid, seasonId, def.get(), objective.get(), amount, now));
         if (txn.status() == ObjectiveResult.Status.COMPLETED) {
             auditCompletion(uuid, seasonId, objectiveId, txn);
-            // Runs on the caller's (server) thread — an admin command — so granting here is safe.
-            for (String rewardId : collectCrossedMilestones(def.get(), txn.oldPoints(), txn.newPoints())) {
-                rewards.grant(uuid, rewardId, "season:" + seasonId);
+            if (txn.milestoneRecorded()) {
+                deliverPendingMilestones(uuid);
             }
         }
         return new ObjectiveResult(txn.status(), txn.progress(), txn.completed());
@@ -182,9 +182,9 @@ public final class SeasonService {
 
     /**
      * Applies progress to several objectives for one player <b>off the server thread</b>: all DB work
-     * runs in one job on the database worker, and any milestone reward grants (which may deliver items
-     * or run commands) are marshalled back onto the server thread. Callers (game-event listeners)
-     * compute matches cheaply and hand off here without blocking the tick.
+     * (objectives, points, and pending milestone records) runs in one transaction on the database
+     * worker, then milestone reward delivery is marshalled back onto the server thread. Callers
+     * (game-event listeners) compute matches cheaply and hand off here without blocking the tick.
      */
     public void advanceObjectivesAsync(UUID uuid, String seasonId, List<ObjectiveMatch> matches) {
         if (matches.isEmpty()) {
@@ -194,44 +194,43 @@ public final class SeasonService {
         if (def == null) {
             return;
         }
+        long now = System.currentTimeMillis();
         db.supplyAsync(conn -> {
-            List<String> milestoneRewards = new ArrayList<>();
-            for (ObjectiveMatch match : matches) {
-                ObjectiveDefinition objective = def.objective(match.objectiveId()).orElse(null);
-                if (objective == null) {
-                    continue;
+            boolean[] anyMilestone = {false};
+            TransactionManager.execute(conn, c -> {
+                for (ObjectiveMatch match : matches) {
+                    ObjectiveDefinition objective = def.objective(match.objectiveId()).orElse(null);
+                    if (objective == null) {
+                        continue;
+                    }
+                    ObjectiveTxn txn = applyObjectiveOnConn(c, uuid, seasonId, def, objective, match.amount(), now);
+                    if (txn.status() == ObjectiveResult.Status.COMPLETED) {
+                        auditCompletion(uuid, seasonId, objective.id, txn);
+                        anyMilestone[0] |= txn.milestoneRecorded();
+                    }
                 }
-                ObjectiveTxn[] holder = {null};
-                TransactionManager.execute(conn, c ->
-                        holder[0] = applyObjectiveOnConn(c, uuid, seasonId, objective, match.amount()));
-                ObjectiveTxn txn = holder[0];
-                if (txn.status() == ObjectiveResult.Status.COMPLETED) {
-                    auditCompletion(uuid, seasonId, objective.id, txn);
-                    milestoneRewards.addAll(collectCrossedMilestones(def, txn.oldPoints(), txn.newPoints()));
-                }
-            }
-            return milestoneRewards;
-        }).thenAccept(rewardIds -> {
-            if (rewardIds.isEmpty()) {
-                return;
-            }
-            MinecraftServer server = ServerHolder.get();
-            if (server != null) {
-                server.execute(() -> rewardIds.forEach(id -> rewards.grant(uuid, id, "season:" + seasonId)));
+            });
+            return anyMilestone[0];
+        }).thenAccept(anyMilestone -> {
+            if (anyMilestone) {
+                deliverPendingMilestonesOnServerThread(uuid);
             }
         }).exceptionally(t -> {
-            LOGGER.warn("Async objective progress failed for {} in '{}': {}", uuid, seasonId, t.getMessage());
+            LOGGER.warn("Async objective progress failed for {} in '{}'", uuid, seasonId, t);
             return null;
         });
     }
 
-    /** The shared transaction body: read, clamp, write objective, award points on completion. */
+    /**
+     * The shared transaction body: read, clamp, write objective, and on completion award points and
+     * record any crossed milestone's pending reward — all atomically with the caller's transaction.
+     */
     private ObjectiveTxn applyObjectiveOnConn(java.sql.Connection conn, UUID uuid, String seasonId,
-                                              ObjectiveDefinition objective, int amount)
-            throws java.sql.SQLException {
+                                              SeasonDefinition def, ObjectiveDefinition objective,
+                                              int amount, long now) throws java.sql.SQLException {
         ObjectiveProgress current = repository.objective(conn, uuid, seasonId, objective.id).orElse(null);
         if (current != null && current.completed()) {
-            return new ObjectiveTxn(ObjectiveResult.Status.ALREADY_COMPLETE, current.progress(), true, -1, -1);
+            return new ObjectiveTxn(ObjectiveResult.Status.ALREADY_COMPLETE, current.progress(), true, -1, -1, false);
         }
         int prev = current == null ? 0 : current.progress();
         int newProgress = Math.max(0, Math.min(objective.required, prev + amount));
@@ -239,13 +238,78 @@ public final class SeasonService {
         repository.setObjective(conn, uuid, seasonId, objective.id, newProgress, completed);
         int oldPoints = -1;
         int newPoints = -1;
+        boolean milestoneRecorded = false;
         if (completed) {
             oldPoints = repository.points(conn, uuid, seasonId);
             newPoints = Math.max(0, oldPoints + objective.points);
             repository.setPoints(conn, uuid, seasonId, newPoints);
+            milestoneRecorded = recordCrossedMilestones(conn, uuid, seasonId, def, oldPoints, newPoints, now);
         }
         return new ObjectiveTxn(completed ? ObjectiveResult.Status.COMPLETED
-                : ObjectiveResult.Status.PROGRESSED, newProgress, completed, oldPoints, newPoints);
+                : ObjectiveResult.Status.PROGRESSED, newProgress, completed, oldPoints, newPoints, milestoneRecorded);
+    }
+
+    /**
+     * Records the durable pending-reward record for each milestone crossed by a points change.
+     * Returns true if at least one was recorded (so the caller can trigger delivery).
+     */
+    private boolean recordCrossedMilestones(java.sql.Connection conn, UUID uuid, String seasonId,
+                                            @Nullable SeasonDefinition def, int oldPoints, int newPoints,
+                                            long now) throws java.sql.SQLException {
+        if (def == null || newPoints <= oldPoints) {
+            return false;
+        }
+        boolean recorded = false;
+        for (Milestone milestone : def.milestones) {
+            if (milestone.reward != null && oldPoints < milestone.points && milestone.points <= newPoints) {
+                repository.insertPendingMilestone(conn, uuid, seasonId, milestone.reward, now);
+                recorded = true;
+            }
+        }
+        return recorded;
+    }
+
+    /** Marshals milestone delivery onto the server thread; leaves it pending (for startup resume) if none. */
+    private void deliverPendingMilestonesOnServerThread(UUID uuid) {
+        MinecraftServer server = ServerHolder.get();
+        if (server == null) {
+            LOGGER.warn("[CV-SEASON-001] Milestone reward(s) pending for {} but no server available; "
+                    + "they will be delivered on the next startup", uuid);
+            return;
+        }
+        server.execute(() -> deliverPendingMilestones(uuid));
+    }
+
+    /**
+     * Grants every pending milestone reward for a player from the durable outbox, deleting each once
+     * its grant lands in an accepted state (delivered, queued, or already claimed). Must run where a
+     * reward grant is safe: the server thread, or startup (no online players).
+     */
+    public void deliverPendingMilestones(UUID uuid) {
+        List<SeasonRepository.PendingMilestone> pending =
+                db.callSync(conn -> repository.pendingMilestones(conn, uuid));
+        pending.forEach(this::deliverOne);
+    }
+
+    /** Re-delivers any milestone rewards left pending by a crash. Called on startup. Returns the count. */
+    public int resumePendingMilestones() {
+        List<SeasonRepository.PendingMilestone> pending = db.callSync(repository::allPendingMilestones);
+        if (!pending.isEmpty()) {
+            LOGGER.info("Resuming {} pending milestone reward(s)", pending.size());
+        }
+        pending.forEach(this::deliverOne);
+        return pending.size();
+    }
+
+    private void deliverOne(SeasonRepository.PendingMilestone pending) {
+        RewardResult result = rewards.grant(pending.uuid(), pending.rewardId(), "season:" + pending.seasonId());
+        if (result.status() == RewardStatus.SUCCESS || result.status() == RewardStatus.QUEUED
+                || result.status() == RewardStatus.ALREADY_CLAIMED) {
+            db.runSync(conn -> repository.deletePendingMilestone(conn, pending.id()));
+        } else {
+            LOGGER.warn("[CV-SEASON-002] Milestone reward '{}' for {} not delivered ({}); left pending",
+                    pending.rewardId(), pending.uuid(), result.status());
+        }
     }
 
     private void auditCompletion(UUID uuid, String seasonId, String objectiveId, ObjectiveTxn txn) {
@@ -258,22 +322,7 @@ public final class SeasonService {
     }
 
     private record ObjectiveTxn(ObjectiveResult.Status status, int progress, boolean completed,
-                                int oldPoints, int newPoints) {
-    }
-
-    private List<String> collectCrossedMilestones(SeasonDefinition def, int oldPoints, int newPoints) {
-        List<String> ids = new ArrayList<>();
-        if (newPoints <= oldPoints) {
-            return ids;
-        }
-        for (Milestone milestone : def.milestones) {
-            if (milestone.reward != null && oldPoints < milestone.points && milestone.points <= newPoints) {
-                ids.add(milestone.reward);
-                LOGGER.info("Player reached {} points in '{}'; queuing milestone reward '{}'",
-                        milestone.points, def.id, milestone.reward);
-            }
-        }
-        return ids;
+                                int oldPoints, int newPoints, boolean milestoneRecorded) {
     }
 
     // --- Lifecycle --------------------------------------------------------------------------------

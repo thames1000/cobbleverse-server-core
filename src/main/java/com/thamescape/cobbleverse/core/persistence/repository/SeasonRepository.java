@@ -125,6 +125,61 @@ public final class SeasonRepository {
         }
     }
 
+    // --- Pending milestone rewards (durable outbox) -----------------------------------------------
+
+    /** An owed milestone reward grant recorded atomically with the objective/points that crossed it. */
+    public record PendingMilestone(long id, UUID uuid, String seasonId, String rewardId) {
+    }
+
+    /** Records an owed milestone grant (idempotent per player/season/reward). */
+    public void insertPendingMilestone(Connection conn, UUID uuid, String seasonId, String rewardId,
+                                       long now) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO pending_milestone_rewards(uuid, season_id, reward_id, created_at) "
+                        + "VALUES (?, ?, ?, ?)")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, seasonId);
+            ps.setString(3, rewardId);
+            ps.setLong(4, now);
+            ps.executeUpdate();
+        }
+    }
+
+    public List<PendingMilestone> pendingMilestones(Connection conn, UUID uuid) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, uuid, season_id, reward_id FROM pending_milestone_rewards "
+                        + "WHERE uuid = ? ORDER BY id")) {
+            ps.setString(1, uuid.toString());
+            return readPending(ps);
+        }
+    }
+
+    public List<PendingMilestone> allPendingMilestones(Connection conn) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT id, uuid, season_id, reward_id FROM pending_milestone_rewards ORDER BY id")) {
+            return readPending(ps);
+        }
+    }
+
+    public void deletePendingMilestone(Connection conn, long id) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "DELETE FROM pending_milestone_rewards WHERE id = ?")) {
+            ps.setLong(1, id);
+            ps.executeUpdate();
+        }
+    }
+
+    private List<PendingMilestone> readPending(PreparedStatement ps) throws SQLException {
+        try (ResultSet rs = ps.executeQuery()) {
+            List<PendingMilestone> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(new PendingMilestone(rs.getLong("id"), UUID.fromString(rs.getString("uuid")),
+                        rs.getString("season_id"), rs.getString("reward_id")));
+            }
+            return out;
+        }
+    }
+
     // --- Lifecycle --------------------------------------------------------------------------------
 
     public Optional<String> lifecycleState(Connection conn, String seasonId) throws SQLException {

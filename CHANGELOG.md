@@ -28,15 +28,32 @@ statistics. Both are exercisable end-to-end with `/cvcore debug publish` — no 
   (`SeasonService.advanceObjectivesAsync`). Database work runs on the DB worker; milestone reward
   grants (which may deliver items / run commands) are marshalled back onto the server thread. Honors
   the bus contract that listeners route database work off-thread. (+ non-blocking test)
-- **Strict objective validation**: unknown objective types (including typos), `capture_species`
-  without a `species`, and `battle_won` with a `battleKind` outside `pvp`/`pvn`/`pvw` now fail config
-  load with a clear error instead of silently never matching.
+- **Strict objective validation**: `capture_species` without a `species`, and `battle_won` with a
+  `battleKind` outside `pvp`/`pvn`/`pvw`, fail config load with a clear error instead of silently
+  never matching.
 - **Statistics failures keep stack traces** (log the throwable, matching the event bus).
 - seasons.md corrected (no longer "manual only"; the capture-species example is named accurately).
 
+### Fixed (from PR review, round 2)
+- **Durable milestone reward delivery** (migration `V008`, `pending_milestone_rewards`): completing an
+  objective (or an admin points change) now records each crossed milestone's owed reward in the **same
+  transaction** as the points, then delivers it from that outbox and deletes the row. A crash between
+  committing points and granting the reward can no longer lose it — `SeasonService.resumePendingMilestones()`
+  (run at startup) re-delivers anything left pending, exactly once. Async completions marshal delivery
+  back onto the server thread; if none is available the reward stays pending for the next startup.
+- **Objective-type validation no longer closes the extension point**: type existence is confirmed
+  against the live `ObjectiveRegistry` at startup (built-ins plus any a module registered via
+  `CoreServices.seasons().objectiveRegistry().register(...)`), not the closed `ObjectiveType` enum.
+  Custom types are honoured; typos and unhandled types still fail fast (`[CV-CONFIG-017]`). The enum
+  now only drives built-in matcher-field checks.
+- **Async objective-progress failures keep stack traces** (log the throwable, not just its message).
+- **Non-blocking test hardened** against a race: it now waits until the DB worker has actually picked
+  up the blocking task before timing `onGameEvent`, so it measures against a genuinely busy worker.
+
 ### Notes
 - Objective types are data-driven (config `type` + fields), matched by registered handlers; the
-  `ObjectiveType` enum is the source of truth for config validation only.
+  `ObjectiveRegistry` is the authority for which types exist, and the `ObjectiveType` enum only drives
+  built-in matcher-field validation.
 - Season objective auto-progress only counts while the season is ACTIVE (existing gate).
 
 ## [0.6.0] - Unreleased

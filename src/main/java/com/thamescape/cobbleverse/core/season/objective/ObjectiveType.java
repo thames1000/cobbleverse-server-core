@@ -4,10 +4,12 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * The objective types the core recognises. Behaviour is dispatched by the {@link ObjectiveRegistry}
- * (data-driven, no central switch), but this enum is the source of truth for <b>config validation</b>
- * — so an unknown or misspelled objective type fails loudly at load rather than silently never
- * matching. {@link #MANUAL} is admin/module-driven; the rest are game-event-driven.
+ * The <b>built-in</b> objective types the core ships. Behaviour is dispatched by the
+ * {@link ObjectiveRegistry} (data-driven, no central switch); the registry — not this enum — is the
+ * authority for which types exist, so modules can register their own. This enum only drives built-in
+ * matcher-field validation (e.g. {@link #CAPTURE_SPECIES} requires a species); type existence is
+ * confirmed against the live registry at startup. {@link #MANUAL} is admin/module-driven; the rest are
+ * game-event-driven.
  */
 public enum ObjectiveType {
     MANUAL,

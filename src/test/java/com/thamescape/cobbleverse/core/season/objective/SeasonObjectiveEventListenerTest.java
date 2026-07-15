@@ -99,16 +99,22 @@ class SeasonObjectiveEventListenerTest {
     void publishingDoesNotBlockOnTheDatabase() throws Exception {
         SeasonObjectiveEventListener listener = build();
         UUID uuid = UUID.randomUUID();
+        CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch gate = new CountDownLatch(1);
         try {
             // Occupy the single database worker with a task that blocks until released.
             db.runAsync(conn -> {
+                entered.countDown();
                 try {
                     gate.await();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
             });
+            // Wait until the worker has actually picked up the blocking task, so the timing below
+            // genuinely measures onGameEvent against a busy worker rather than an idle one.
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS),
+                    "database worker did not start the blocking task");
 
             long start = System.nanoTime();
             listener.onGameEvent(capture(uuid, "pikachu")); // must only compute matches + enqueue
