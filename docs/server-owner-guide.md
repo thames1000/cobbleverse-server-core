@@ -32,9 +32,10 @@ commands, integration detection, messaging, health checks, auditing — that *fu
 build on.
 
 If you installed it expecting gameplay features, that's expected: the visible surface so far is the
-`/cvcore`, `/profile`, and `/rewards` commands, a startup report in the log, a SQLite database
-tracking player identity and playtime, and a config-driven reward + currency system. Larger gameplay
-(seasons, events) arrives as later versions and separate modules.
+`/cvcore`, `/profile`, `/rewards`, and `/season` commands, a startup report in the log, a SQLite
+database tracking player identity and playtime, a config-driven reward + currency system, and
+config-driven seasons with objectives and points milestones. More gameplay (events, and event-driven
+objective tracking) arrives as later versions and separate modules.
 
 ---
 
@@ -190,6 +191,31 @@ by other mods. Created with a sample definition on first run:
 Runtime-reloadable with `/cvcore reload`. Full details (all reward types, template placeholders,
 offline queue behaviour) in [rewards.md](rewards.md).
 
+### `seasons.json` (0.4.0)
+
+Defines seasons, their objectives, and points milestones. Which season is current is set by
+`core.json`'s `activeSeason`; a season is created disabled by default on first run.
+
+```json
+{
+  "configVersion": 1,
+  "seasons": {
+    "summer_2026": {
+      "displayName": "Summer Splash",
+      "startsAt": "2026-07-01T00:00:00-04:00",
+      "endsAt": "2026-08-01T00:00:00-04:00",
+      "enabled": true,
+      "objectives": [
+        { "id": "catch_water_25", "type": "manual", "required": 25, "points": 20 }
+      ],
+      "milestones": [ { "points": 20, "reward": "summer_2026_tier_1" } ]
+    }
+  }
+}
+```
+
+Runtime-reloadable with `/cvcore reload`. Full details in [seasons.md](seasons.md).
+
 ### Configuration rules (important)
 
 - **A broken config is never silently replaced.** If a file has invalid JSON, the mod backs it up as
@@ -224,6 +250,12 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/rewards`             | `cobbleverse.command.rewards` | all        | List rewards and their claim state        |
 | `/rewards claim <id>`  | `cobbleverse.reward.claim`    | all        | Claim a reward for yourself                |
 | `/rewards preview <id>` | `cobbleverse.reward.preview` | all        | See what a reward would grant (dry run)   |
+| `/season`              | `cobbleverse.command.season`  | all        | Active season name, state, your points    |
+| `/season progress`     | `cobbleverse.season.progress` | all        | Your objectives and next milestone        |
+| `/cvcore season info`  | `cobbleverse.admin.season`    | 4          | Active season details + lifecycle state   |
+| `/cvcore season progress <player>` | `cobbleverse.admin.season` | 4  | View a player's season progress           |
+| `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | 4 | Adjust a player's points (may be negative) |
+| `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | 4 | Add objective progress |
 
 ### What `/cvcore reload` does — and does not — do
 
@@ -250,9 +282,12 @@ cobbleverse.admin.debug        # /cvcore debug                           (op-4 f
 cobbleverse.admin.database     # /cvcore database status                 (op-4 fallback)
 cobbleverse.admin.player       # /cvcore player create <name>            (op-4 fallback)
 cobbleverse.admin.rewards      # /cvcore reward list | grant             (op-4 fallback)
+cobbleverse.admin.season       # /cvcore season ...                      (op-4 fallback)
 cobbleverse.command.rewards    # /rewards                                (available to all)
 cobbleverse.reward.claim       # /rewards claim <id>                     (available to all)
 cobbleverse.reward.preview     # /rewards preview <id>                   (available to all)
+cobbleverse.command.season     # /season                                (available to all)
+cobbleverse.season.progress    # /season progress                       (available to all)
 cobbleverse.command.profile    # /profile (own)                          (available to all)
 cobbleverse.profile.view.other # /profile <player>                       (op-2 fallback)
 ```
@@ -345,6 +380,21 @@ audits, and (for offline players) queues them.
   `/cvcore reward retry <player> [id]`.
 
 See [rewards.md](rewards.md) for the full reference.
+
+### Seasons
+
+A season (`seasons.json`, active one named by `core.json` `activeSeason`) is a set of objectives that
+award points; reaching a points milestone grants a reward.
+
+- **0.4.0 objectives are manual** — progress is set by admins (`/cvcore season objective …`) or other
+  modules, not auto-tracked yet. Cobblemon capture/battle tracking comes later.
+- Completing an objective awards its points; crossing a milestone grants that milestone's reward
+  through the reward system (so it dedups and queues if the player is offline).
+- A season's state (upcoming / active / ended) is derived from its window; transitions are detected
+  once a minute and on startup.
+- Check with `/season`, `/season progress`, and `/cvcore season info | progress <player>`.
+
+See [seasons.md](seasons.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 
@@ -475,6 +525,7 @@ update whichever of these applies:
 | A command or its permission           | [§6](#6-commands), [§7](#7-permissions-luckperms), `docs/commands.md`, `docs/permissions.md` |
 | A config field or file                | [§5](#5-configuration), `docs/configuration.md`     |
 | A reward type, currency, or template   | [§9](#9-day-to-day-operation), `docs/rewards.md`    |
+| A season, objective, or milestone      | [§9](#9-day-to-day-operation), `docs/seasons.md`    |
 | An integration (added/removed/mod id) | [§8](#8-integrations), `docs/integrations.md`       |
 | Startup behaviour or the report       | [§4](#4-first-run--what-you-should-see), `docs/architecture.md` |
 | Anything user-visible                 | `CHANGELOG.md`                                      |

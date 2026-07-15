@@ -73,7 +73,12 @@ and `maxDeliveryAttempts` (queued deliveries dead-letter after this many failure
 sample definition on first run; **runtime-reloadable** via `/cvcore reload`. See
 [rewards.md](rewards.md) for the full reference.
 
+## `seasons.json` (0.4.0)
+
+Season definitions with objectives and points milestones. The active season is named by `core.json`'s
+`activeSeason`. Runtime-reloadable via `/cvcore reload`. See [seasons.md](seasons.md).
+
 ## Planned files
 
-Later versions add `permissions.json`, `scheduler.json`, `integrations.json`, `seasons.json` and
-`web-api.json`, each following the same versioned, strictly validated pattern.
+Later versions add `permissions.json`, `scheduler.json`, `integrations.json` and `web-api.json`, each
+following the same versioned, strictly validated pattern.

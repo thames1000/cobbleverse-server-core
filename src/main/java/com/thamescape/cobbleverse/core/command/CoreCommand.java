@@ -2,6 +2,7 @@ package com.thamescape.cobbleverse.core.command;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.thamescape.cobbleverse.core.CoreConstants;
@@ -103,6 +104,31 @@ public final class CoreCommand {
                         .then(argument("player", StringArgumentType.word())
                                 .executes(ctx -> rewardQueue(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "player"))))));
+
+        root.then(literal("season")
+                .requires(perms.require(CorePermissions.ADMIN_SEASON, CoreConstants.ADMIN_FALLBACK_LEVEL))
+                .then(literal("info")
+                        .executes(ctx -> seasonInfo(ctx.getSource())))
+                .then(literal("progress")
+                        .then(argument("player", StringArgumentType.word())
+                                .executes(ctx -> seasonProgress(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player")))))
+                .then(literal("addpoints")
+                        .then(argument("player", StringArgumentType.word())
+                                .then(argument("amount", IntegerArgumentType.integer())
+                                        .executes(ctx -> seasonAddPoints(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "player"),
+                                                IntegerArgumentType.getInteger(ctx, "amount"))))))
+                .then(literal("objective")
+                        .then(argument("player", StringArgumentType.word())
+                                .then(argument("objective", StringArgumentType.word())
+                                        .suggests((c, b) -> net.minecraft.command.CommandSource
+                                                .suggestMatching(SeasonCommand.activeObjectiveIds(), b))
+                                        .then(argument("amount", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> seasonObjective(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "player"),
+                                                        StringArgumentType.getString(ctx, "objective"),
+                                                        IntegerArgumentType.getInteger(ctx, "amount"))))))));
 
         dispatcher.register(root);
     }
@@ -312,6 +338,65 @@ public final class CoreCommand {
             }
         });
         return 1;
+    }
+
+    private static int seasonInfo(ServerCommandSource source) {
+        var seasons = CoreServices.seasons();
+        var def = seasons.activeDefinition().orElse(null);
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Season")), false);
+        if (def == null) {
+            line(source, "active season: <none> (core.json activeSeason='" + seasons.activeSeasonId() + "')");
+            return 1;
+        }
+        line(source, "id: " + def.id + " (" + def.displayNameOrId() + ")");
+        line(source, "state: " + seasons.state(def));
+        line(source, "window: " + def.startsAt + " -> " + def.endsAt);
+        line(source, "objectives: " + def.objectives.size() + ", milestones: " + def.milestones.size());
+        return 1;
+    }
+
+    private static int seasonProgress(ServerCommandSource source, String playerName) {
+        withResolvedUuid(source, playerName, uuid -> SeasonCommand.reportFor(source, uuid));
+        return 1;
+    }
+
+    private static int seasonAddPoints(ServerCommandSource source, String playerName, int amount) {
+        String seasonId = activeSeasonOrError(source);
+        if (seasonId == null) {
+            return 0;
+        }
+        withResolvedUuid(source, playerName, uuid -> {
+            int total = CoreServices.seasons().addPoints(uuid, seasonId, amount, "admin:" + source.getName());
+            source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                    "Adjusted points by " + amount + "; new total: " + total)), true);
+        });
+        return 1;
+    }
+
+    private static int seasonObjective(ServerCommandSource source, String playerName,
+                                       String objectiveId, int amount) {
+        String seasonId = activeSeasonOrError(source);
+        if (seasonId == null) {
+            return 0;
+        }
+        withResolvedUuid(source, playerName, uuid -> {
+            var result = CoreServices.seasons().addObjectiveProgress(uuid, seasonId, objectiveId, amount);
+            source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                    "Objective '" + objectiveId + "': " + result.status()
+                            + " (progress " + result.progress() + ")")), true);
+        });
+        return 1;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private static String activeSeasonOrError(ServerCommandSource source) {
+        var def = CoreServices.seasons().activeDefinition().orElse(null);
+        if (def == null) {
+            source.sendError(Text.literal("No active season configured (see core.json activeSeason)."));
+            return null;
+        }
+        return def.id;
     }
 
     /** Resolves a player name to a UUID (online directly, offline via async Mojang lookup) then runs {@code action}. */

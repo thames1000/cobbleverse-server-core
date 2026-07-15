@@ -18,11 +18,13 @@ public final class ConfigManager {
     private static final String CORE_FILE = "core.json";
     private static final String DATABASE_FILE = "database.json";
     private static final String REWARDS_FILE = "rewards.json";
+    private static final String SEASONS_FILE = "seasons.json";
 
     private final ConfigLoader loader;
     private volatile CoreConfig coreConfig;
     private volatile DatabaseConfig databaseConfig;
     private volatile RewardsConfig rewardsConfig;
+    private volatile SeasonsConfig seasonsConfig;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
@@ -49,6 +51,7 @@ public final class ConfigManager {
         this.databaseConfig = db;
 
         this.rewardsConfig = loadRewards();
+        this.seasonsConfig = loadSeasons();
     }
 
     private RewardsConfig loadRewards() {
@@ -61,6 +64,17 @@ public final class ConfigManager {
         // Back-fill each definition's id from its map key (ids are not stored in the JSON body).
         rewards.definitions.forEach((id, def) -> def.id = id);
         return rewards;
+    }
+
+    private SeasonsConfig loadSeasons() {
+        SeasonsConfig seasons = loader.loadOrCreate(SEASONS_FILE, SeasonsConfig.class, SeasonsConfig::defaults);
+        List<String> problems = ConfigValidator.validate(seasons);
+        if (!problems.isEmpty()) {
+            throw new ConfigurationException("CV-CONFIG-016",
+                    "Invalid seasons.json:\n  - " + String.join("\n  - ", problems));
+        }
+        seasons.seasons.forEach((id, def) -> def.id = id);
+        return seasons;
     }
 
     /**
@@ -91,6 +105,17 @@ public final class ConfigManager {
         } else {
             LOGGER.warn("rewards.json reload rejected; keeping previous. {} problem(s).", rewardProblems.size());
             problems.addAll(rewardProblems);
+        }
+
+        SeasonsConfig seasons = loader.loadOrCreate(SEASONS_FILE, SeasonsConfig.class, SeasonsConfig::defaults);
+        List<String> seasonProblems = ConfigValidator.validate(seasons);
+        if (seasonProblems.isEmpty()) {
+            seasons.seasons.forEach((id, def) -> def.id = id);
+            this.seasonsConfig = seasons;
+            LOGGER.info("Reloaded season definitions ({})", seasons.seasons.size());
+        } else {
+            LOGGER.warn("seasons.json reload rejected; keeping previous. {} problem(s).", seasonProblems.size());
+            problems.addAll(seasonProblems);
         }
 
         return problems;
@@ -125,6 +150,16 @@ public final class ConfigManager {
         if (current == null) {
             throw new ConfigurationException("CV-CONFIG-015",
                     "Rewards configuration accessed before load()");
+        }
+        return current;
+    }
+
+    /** The season definitions. Runtime-reloadable. */
+    public SeasonsConfig seasons() {
+        SeasonsConfig current = seasonsConfig;
+        if (current == null) {
+            throw new ConfigurationException("CV-CONFIG-017",
+                    "Seasons configuration accessed before load()");
         }
         return current;
     }

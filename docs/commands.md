@@ -17,6 +17,10 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline)  |
 | `/cvcore reward retry <player> [id]` | `cobbleverse.admin.rewards` | op 4 | Revive dead-lettered rewards, re-deliver |
 | `/cvcore reward queue <player>` | `cobbleverse.admin.rewards` | op 4 | Inspect a player's reward queue     |
+| `/cvcore season info`  | `cobbleverse.admin.season`   | op 4       | Active season details + lifecycle   |
+| `/cvcore season progress <player>` | `cobbleverse.admin.season` | op 4 | View a player's season progress   |
+| `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | op 4 | Adjust points (may be negative) |
+| `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | op 4 | Add objective progress |
 
 ## Player commands
 
@@ -27,6 +31,8 @@ fallback) and, with no argument, runs `info`.
 | `/rewards`          | `cobbleverse.command.rewards`    | all      | List rewards and their claim state       |
 | `/rewards claim <id>` | `cobbleverse.reward.claim`     | all      | Claim a reward for yourself              |
 | `/rewards preview <id>` | `cobbleverse.reward.preview` | all      | Dry-run: what a reward would grant       |
+| `/season`           | `cobbleverse.command.season`     | all      | Active season name, state, your points   |
+| `/season progress`  | `cobbleverse.season.progress`    | all      | Your objectives and next milestone       |
 
 ## Reload scope
 
