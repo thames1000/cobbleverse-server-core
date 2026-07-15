@@ -98,6 +98,28 @@ public final class DatabaseManager {
         });
     }
 
+    /** Runs {@code work} inside a transaction on the worker thread and returns its result. */
+    public <T> T callInTransaction(SqlFunction<T> work) {
+        return callSync(conn -> {
+            boolean previousAutoCommit = conn.getAutoCommit();
+            conn.setAutoCommit(false);
+            try {
+                T result = work.apply(conn);
+                conn.commit();
+                return result;
+            } catch (SQLException | RuntimeException e) {
+                try {
+                    conn.rollback();
+                } catch (SQLException rollback) {
+                    e.addSuppressed(rollback);
+                }
+                throw e;
+            } finally {
+                conn.setAutoCommit(previousAutoCommit);
+            }
+        });
+    }
+
     // --- Asynchronous (runtime) -------------------------------------------------------------------
 
     /** Runs work on the worker thread without blocking. Failures complete the future exceptionally. */

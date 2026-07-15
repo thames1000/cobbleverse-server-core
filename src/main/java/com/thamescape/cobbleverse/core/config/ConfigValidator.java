@@ -159,11 +159,18 @@ public final class ConfigValidator {
             String id = entry.getKey();
             var season = entry.getValue();
             String where = "seasons.json: season '" + id + "'";
-            if (!isValidDateTime(season.startsAt)) {
+            boolean startValid = isValidDateTime(season.startsAt);
+            boolean endValid = isValidDateTime(season.endsAt);
+            if (!startValid) {
                 problems.add(where + ": startsAt is not a valid ISO offset date-time");
             }
-            if (!isValidDateTime(season.endsAt)) {
+            if (!endValid) {
                 problems.add(where + ": endsAt is not a valid ISO offset date-time");
+            }
+            if (startValid && endValid
+                    && !java.time.OffsetDateTime.parse(season.endsAt)
+                            .isAfter(java.time.OffsetDateTime.parse(season.startsAt))) {
+                problems.add(where + ": endsAt must be after startsAt");
             }
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (var objective : season.objectives) {
@@ -223,6 +230,46 @@ public final class ConfigValidator {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Cross-config integrity: season milestone rewards and event completion rewards must reference an
+     * existing, <b>non-repeatable</b> reward definition. Non-repeatable is required because these
+     * rewards are granted through replay-safe paths (season milestone re-crossing, event completion
+     * resume) that rely on claim dedup — a repeatable reward could be granted more than once.
+     */
+    public static List<String> validateCrossReferences(RewardsConfig rewards, SeasonsConfig seasons,
+                                                       EventsConfig events) {
+        List<String> problems = new ArrayList<>();
+        for (var season : seasons.seasons.entrySet()) {
+            for (var milestone : season.getValue().milestones) {
+                checkReplaySafeReward(rewards, milestone.reward,
+                        "seasons.json: season '" + season.getKey() + "' milestone reward", problems);
+            }
+        }
+        for (var event : events.events.entrySet()) {
+            if (event.getValue().rewards != null) {
+                for (String rewardId : event.getValue().rewards) {
+                    checkReplaySafeReward(rewards, rewardId,
+                            "events.json: event '" + event.getKey() + "' completion reward", problems);
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static void checkReplaySafeReward(RewardsConfig rewards, String rewardId,
+                                              String where, List<String> problems) {
+        if (isBlank(rewardId)) {
+            return; // absence handled by per-file validation
+        }
+        var def = rewards.definitions.get(rewardId);
+        if (def == null) {
+            problems.add(where + " '" + rewardId + "' does not exist in rewards.json");
+        } else if (def.repeatable) {
+            problems.add(where + " '" + rewardId + "' is repeatable; must be non-repeatable "
+                    + "(replay-safe grants require claim dedup)");
         }
     }
 

@@ -164,9 +164,9 @@ class EventServiceTest {
             });
             assertEquals(0L, db.callSync(rewardRepo::queueCount), "nothing distributed before resume");
 
-            assertEquals(1, events.resumePendingDistributions());
+            assertEquals(1, events.resumePendingDistributions().completed());
             assertEquals(2L, db.callSync(rewardRepo::queueCount), "both participants' rewards queued on resume");
-            assertEquals(0, events.resumePendingDistributions(), "resume is a no-op once distributed");
+            assertEquals(0, events.resumePendingDistributions().found(), "resume is a no-op once distributed");
         } finally {
             db.close();
         }
@@ -182,7 +182,31 @@ class EventServiceTest {
             events.transition(EVENT, EventState.ACTIVE, "t");
             events.transition(EVENT, EventState.COMPLETED, "t"); // distributes and marks done
             assertEquals(1L, db.callSync(rewardRepo::queueCount));
-            assertEquals(0, events.resumePendingDistributions(), "a fully-distributed event is not resumed");
+            assertEquals(0, events.resumePendingDistributions().found(), "a fully-distributed event is not resumed");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void missingDefinitionStaysPending() {
+        events = build();
+        EventRepository repo = new EventRepository();
+        try {
+            // A completed event whose definition is gone (e.g. removed from events.json).
+            db.runSync(conn -> {
+                repo.setState(conn, "ghost", "COMPLETED", null, 1L, 1L);
+                repo.setRewardsDistributed(conn, "ghost", false);
+            });
+            var summary = events.resumePendingDistributions();
+            assertEquals(1, summary.missingDefinition());
+            assertEquals(0, summary.completed());
+            // It is NOT silently marked done — reward loss must be an explicit admin action.
+            assertFalse(db.callSync(repo::pendingRewardEventIds).isEmpty(), "missing-def event stays pending");
+
+            // Abandon is the explicit escape hatch.
+            assertTrue(events.abandonRewards("ghost", "admin").ok());
+            assertTrue(db.callSync(repo::pendingRewardEventIds).isEmpty(), "abandon clears the pending flag");
         } finally {
             db.close();
         }

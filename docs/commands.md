@@ -26,6 +26,7 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | op 4 | Drive event lifecycle |
 | `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | op 4 | Add a participant from console |
 | `/cvcore event score <id> <player> <amount>` | `cobbleverse.admin.events` | op 4 | Adjust a participant's score |
+| `/cvcore event rewards abandon <id>` | `cobbleverse.admin.events` | op 4 | Drop a stuck pending reward distribution |
 
 ## Player commands
 

@@ -68,4 +68,36 @@ class ConfigValidatorTest {
         config.flushIntervalSeconds = 0;
         assertFalse(ConfigValidator.validate(config).isEmpty(), "flush interval must be positive");
     }
+
+    @Test
+    void reversedSeasonDatesAreRejected() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        var season = config.seasons.get("sample_season");
+        season.startsAt = "2026-12-31T00:00:00Z";
+        season.endsAt = "2026-01-01T00:00:00Z";
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "endsAt before startsAt must be flagged");
+    }
+
+    @Test
+    void defaultsCrossValidateCleanly() {
+        assertTrue(ConfigValidator.validateCrossReferences(
+                RewardsConfig.defaults(), SeasonsConfig.defaults(), EventsConfig.defaults()).isEmpty());
+    }
+
+    @Test
+    void repeatableMilestoneRewardIsRejected() {
+        RewardsConfig rewards = RewardsConfig.defaults();
+        rewards.definitions.get("sample_tier_1").repeatable = true; // milestone target must be non-repeatable
+        List<String> problems = ConfigValidator.validateCrossReferences(
+                rewards, SeasonsConfig.defaults(), EventsConfig.defaults());
+        assertFalse(problems.isEmpty(), "a repeatable milestone/event reward must be flagged");
+    }
+
+    @Test
+    void missingEventRewardIsRejected() {
+        // Empty rewards config: the default event's completion reward can't be resolved.
+        List<String> problems = ConfigValidator.validateCrossReferences(
+                new RewardsConfig(), new SeasonsConfig(), EventsConfig.defaults());
+        assertFalse(problems.isEmpty(), "an event reward that doesn't exist must be flagged");
+    }
 }
