@@ -38,6 +38,14 @@ public class WebConfig {
         public String apiKey = "";
         /** Upper bound clamp for leaderboard {@code limit} query params. */
         public int leaderboardMaxLimit = 100;
+        /**
+         * Max requests processed concurrently. Excess requests get {@code 503} immediately rather than
+         * queueing onto — and starving — the shared database worker. Keep this well below the number of
+         * gameplay-critical operations you can tolerate delaying.
+         */
+        public int maxConcurrentRequests = 6;
+        /** Per-client-IP request cap per minute (fixed window). {@code 0} disables rate limiting. */
+        public int rateLimitPerMinute = 120;
     }
 
     /** Outbound webhook settings. */

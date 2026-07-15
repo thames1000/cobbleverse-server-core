@@ -6,31 +6,38 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Owns the embedded JDK {@link HttpServer} that serves the read-only API. A bind failure (port in use,
  * bad address) is logged and leaves the API simply <b>off</b> — it never aborts the Minecraft server.
- * Requests are handled on a small daemon thread pool; data access marshals to the DB worker as usual.
+ *
+ * <p>Requests run on a <b>bounded</b> daemon thread pool with a bounded queue, so a flood of requests
+ * cannot grow work without bound. Graceful overload handling (503) is done in {@link ApiRouter} via a
+ * concurrency permit; this pool's bounded queue is only a last-ditch memory backstop (excess is
+ * dropped at the socket). Data access still marshals to the DB worker.
  */
 public final class ApiServer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("CobbleverseCore/WEB");
-    private static final int THREADS = 4;
+    private static final int QUEUE_CAPACITY = 64;
 
     private final String bindAddress;
     private final int port;
+    private final int threads;
     private final ApiRouter router;
 
     private HttpServer server;
     private ExecutorService executor;
 
-    public ApiServer(String bindAddress, int port, ApiRouter router) {
+    public ApiServer(String bindAddress, int port, int threads, ApiRouter router) {
         this.bindAddress = bindAddress;
         this.port = port;
+        this.threads = Math.max(2, threads);
         this.router = router;
     }
 
@@ -48,11 +55,12 @@ public final class ApiServer {
             return;
         }
         AtomicInteger counter = new AtomicInteger();
-        executor = Executors.newFixedThreadPool(THREADS, runnable -> {
-            Thread thread = new Thread(runnable, "cvcore-api-" + counter.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-        });
+        executor = new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(QUEUE_CAPACITY), runnable -> {
+                    Thread thread = new Thread(runnable, "cvcore-api-" + counter.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.AbortPolicy());
         created.setExecutor(executor);
         created.createContext("/", router);
         created.start();

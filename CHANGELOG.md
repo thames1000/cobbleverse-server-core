@@ -3,6 +3,36 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - Unreleased
+
+Hardening pass over the 0.7.0 web integration (from PR review) — the fixes to make before exposing the
+API beyond loopback.
+
+### Fixed (from PR review)
+- **API can no longer starve the shared database worker** (High): the read API is now bounded two ways.
+  `maxConcurrentRequests` caps how many requests do DB work at once (excess → `503` immediately, never
+  queued onto the worker); `rateLimitPerMinute` caps requests per client IP per minute (fixed window,
+  `0` disables; over → `429`). Handlers run on a bounded thread pool with a **bounded** queue instead
+  of an unbounded one.
+- **Unauthenticated `/health` no longer leaks internals** (Medium): public `/health` is now a minimal
+  liveness probe (`{"status":"OK"}`) that runs no checks and touches no database. The full diagnostics
+  (per-check details, version) moved behind auth to **`GET /api/v1/health`**.
+- **Enabled webhooks with auditing off are rejected** (Medium): new cross-config check
+  (`[CV-CONFIG-024]`) fails startup when `webhooks.enabled` but `core.enableAuditLog` is false, instead
+  of silently delivering nothing (webhooks are fed by the audit stream).
+- **Malformed query encoding returns `400`, not `500`** (Low): `ApiRouter` catches the decoder's
+  `IllegalArgumentException` and treats it as a bad request.
+- **Webhook shutdown no longer races retries** (Low): the retry scheduler checks `isShutdown()` and
+  catches `RejectedExecutionException`, so a completion firing after `close()` drops its retry quietly
+  instead of throwing.
+- **`/api/v1/stats/<uuid>` is consistent with `/player`** (Low): an unknown player now returns `404`
+  rather than a successful all-zero record.
+
+### Notes
+- New `web.json` `api` fields: `maxConcurrentRequests` (default 6), `rateLimitPerMinute` (default 120).
+- Behind a reverse proxy the client IP is the proxy's, so also rate-limit at the proxy. A dedicated
+  read-only DB connection for API reads is noted as a candidate future enhancement.
+
 ## [0.7.0] - Unreleased
 
 Web integration: exposing the data the core already owns (leaderboards, season/event state, player

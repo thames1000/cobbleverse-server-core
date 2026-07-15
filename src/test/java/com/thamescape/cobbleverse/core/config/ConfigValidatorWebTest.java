@@ -3,6 +3,7 @@ package com.thamescape.cobbleverse.core.config;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+// CoreConfig is in this package; no import needed.
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +42,41 @@ class ConfigValidatorWebTest {
         config.api.apiKey = "secret";
         config.api.port = 7070;
         assertTrue(ConfigValidator.validate(config).isEmpty(), "a keyed, in-range API config is valid");
+    }
+
+    @Test
+    void nonPositiveMaxConcurrentIsRejected() {
+        WebConfig config = new WebConfig();
+        config.api.enabled = true;
+        config.api.apiKey = "secret";
+        config.api.maxConcurrentRequests = 0;
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "maxConcurrentRequests must be positive");
+    }
+
+    @Test
+    void negativeRateLimitIsRejected() {
+        WebConfig config = new WebConfig();
+        config.api.enabled = true;
+        config.api.apiKey = "secret";
+        config.api.rateLimitPerMinute = -1;
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "rateLimitPerMinute must not be negative");
+    }
+
+    @Test
+    void webhooksEnabledWithoutAuditingIsRejected() {
+        CoreConfig core = CoreConfig.defaults();
+        core.enableAuditLog = false;
+        WebConfig web = enabledWebhook("https://example.com/hook", "generic", List.of("*"));
+        assertFalse(ConfigValidator.validateWebDependencies(core, web).isEmpty(),
+                "enabled webhooks with auditing off must be rejected");
+    }
+
+    @Test
+    void webhooksEnabledWithAuditingIsAccepted() {
+        CoreConfig core = CoreConfig.defaults(); // enableAuditLog defaults true
+        WebConfig web = enabledWebhook("https://example.com/hook", "generic", List.of("*"));
+        assertTrue(ConfigValidator.validateWebDependencies(core, web).isEmpty(),
+                "webhooks with auditing on are fine");
     }
 
     @Test

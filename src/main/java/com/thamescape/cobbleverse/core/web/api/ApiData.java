@@ -31,6 +31,7 @@ public interface ApiData {
     @Nullable
     JsonObject player(UUID uuid);
 
-    /** A player's statistics (zeros if never recorded). Always present. */
+    /** A player's statistics (zeros if never recorded). Null if the player has no profile. */
+    @Nullable
     JsonObject stats(UUID uuid);
 }
