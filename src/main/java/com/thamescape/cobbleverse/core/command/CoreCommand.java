@@ -16,6 +16,7 @@ import com.thamescape.cobbleverse.core.integration.IntegrationReport;
 import com.thamescape.cobbleverse.core.message.MessageKey;
 import com.thamescape.cobbleverse.core.permission.CorePermissions;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
+import com.thamescape.cobbleverse.core.event.EventState;
 import com.thamescape.cobbleverse.core.persistence.MigrationManager;
 import com.thamescape.cobbleverse.core.player.PlayerProfileService;
 import net.fabricmc.loader.api.FabricLoader;
@@ -128,9 +129,46 @@ public final class CoreCommand {
                                                 .executes(ctx -> seasonObjective(ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "player"),
                                                         StringArgumentType.getString(ctx, "objective"),
+                                                        IntegerArgumentType.getInteger(ctx, "amount")))))))
+                .then(literal("top")
+                        .executes(ctx -> seasonTop(ctx.getSource(), 10))
+                        .then(argument("count", IntegerArgumentType.integer(1, 100))
+                                .executes(ctx -> seasonTop(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "count"))))));
+
+        root.then(literal("event")
+                .requires(perms.require(CorePermissions.ADMIN_EVENTS, CoreConstants.ADMIN_FALLBACK_LEVEL))
+                .then(literal("list").executes(ctx -> eventList(ctx.getSource())))
+                .then(eventTransitionNode("open", EventState.OPEN))
+                .then(eventTransitionNode("start", EventState.ACTIVE))
+                .then(eventTransitionNode("complete", EventState.COMPLETED))
+                .then(eventTransitionNode("cancel", EventState.CANCELLED))
+                .then(eventTransitionNode("schedule", EventState.SCHEDULED))
+                .then(literal("addplayer")
+                        .then(argument("id", StringArgumentType.word()).suggests(EventCommand.ID_SUGGESTIONS)
+                                .then(argument("player", StringArgumentType.word())
+                                        .executes(ctx -> eventAddPlayer(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "id"),
+                                                StringArgumentType.getString(ctx, "player"))))))
+                .then(literal("score")
+                        .then(argument("id", StringArgumentType.word()).suggests(EventCommand.ID_SUGGESTIONS)
+                                .then(argument("player", StringArgumentType.word())
+                                        .then(argument("amount", IntegerArgumentType.integer())
+                                                .executes(ctx -> eventScore(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "id"),
+                                                        StringArgumentType.getString(ctx, "player"),
                                                         IntegerArgumentType.getInteger(ctx, "amount"))))))));
 
         dispatcher.register(root);
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<ServerCommandSource>
+            eventTransitionNode(String name, EventState target) {
+        return literal(name).then(argument("id", StringArgumentType.word())
+                .suggests(EventCommand.ID_SUGGESTIONS)
+                .executes(ctx -> EventCommand.report(ctx.getSource(),
+                        CoreServices.events().transition(StringArgumentType.getString(ctx, "id"),
+                                target, "admin:" + ctx.getSource().getName()))));
     }
 
     private static int info(ServerCommandSource source) {
@@ -385,6 +423,59 @@ public final class CoreCommand {
             source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
                     "Objective '" + objectiveId + "': " + result.status()
                             + " (progress " + result.progress() + ")")), true);
+        });
+        return 1;
+    }
+
+    private static int seasonTop(ServerCommandSource source, int count) {
+        String seasonId = activeSeasonOrError(source);
+        if (seasonId == null) {
+            return 0;
+        }
+        var top = CoreServices.seasons().leaderboard(seasonId, count);
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Season leaderboard — " + seasonId)), false);
+        if (top.isEmpty()) {
+            line(source, "(no points yet)");
+            return 1;
+        }
+        int rank = 1;
+        for (var e : top) {
+            line(source, (rank++) + ". " + e.label() + " — " + e.points());
+        }
+        return 1;
+    }
+
+    private static int eventList(ServerCommandSource source) {
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Events")), false);
+        var ids = CoreServices.events().definitionIds();
+        if (ids.isEmpty()) {
+            line(source, "(none configured)");
+            return 1;
+        }
+        for (String id : ids) {
+            CoreServices.events().definition(id).ifPresent(def -> line(source, id + " — "
+                    + def.displayNameOrId() + " [" + CoreServices.events().state(id) + ", "
+                    + CoreServices.events().participantCount(id) + " joined]"));
+        }
+        return 1;
+    }
+
+    private static int eventAddPlayer(ServerCommandSource source, String id, String playerName) {
+        if (CoreServices.events().definition(id).isEmpty()) {
+            source.sendError(Text.literal("No event '" + id + "'."));
+            return 0;
+        }
+        withResolvedUuid(source, playerName, uuid ->
+                EventCommand.report(source, CoreServices.events().join(uuid, id)));
+        return 1;
+    }
+
+    private static int eventScore(ServerCommandSource source, String id, String playerName, int amount) {
+        withResolvedUuid(source, playerName, uuid -> {
+            var result = CoreServices.events().addScore(uuid, id, amount);
+            EventCommand.report(source, result);
         });
         return 1;
     }

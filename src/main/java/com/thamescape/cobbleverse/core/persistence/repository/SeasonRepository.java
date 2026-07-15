@@ -1,18 +1,48 @@
 package com.thamescape.cobbleverse.core.persistence.repository;
 
 import com.thamescape.cobbleverse.core.season.ObjectiveProgress;
+import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /** Season points, per-objective progress, and season lifecycle state. */
 public final class SeasonRepository {
+
+    /** A leaderboard row: player and their points. {@code name} may be null if never seen. */
+    public record LeaderboardEntry(UUID uuid, @Nullable String name, int points) {
+        public String label() {
+            return name != null ? name : uuid.toString().substring(0, 8);
+        }
+    }
+
+    /** Top players by points in a season (points > 0), highest first. */
+    public List<LeaderboardEntry> topByPoints(Connection conn, String seasonId, int limit)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT p.uuid, pr.last_known_name AS name, p.points "
+                        + "FROM season_progress p LEFT JOIN player_profiles pr ON pr.uuid = p.uuid "
+                        + "WHERE p.season_id = ? AND p.points > 0 ORDER BY p.points DESC LIMIT ?")) {
+            ps.setString(1, seasonId);
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<LeaderboardEntry> out = new ArrayList<>();
+                while (rs.next()) {
+                    out.add(new LeaderboardEntry(UUID.fromString(rs.getString("uuid")),
+                            rs.getString("name"), rs.getInt("points")));
+                }
+                return out;
+            }
+        }
+    }
 
     // --- Points -----------------------------------------------------------------------------------
 

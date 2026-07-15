@@ -25,11 +25,15 @@ perms.check(source, CorePermissions.ADMIN_RELOAD, CoreConstants.ADMIN_FALLBACK_L
 | `cobbleverse.command.profile`    | all      | `/profile` (own)                         |
 | `cobbleverse.profile.view.other` | op 2     | `/profile <player>`                      |
 | `cobbleverse.admin.season`       | op 4     | `/cvcore season …`                       |
+| `cobbleverse.admin.events`       | op 4     | `/cvcore event …`                        |
 | `cobbleverse.command.rewards`    | all      | `/rewards`                               |
 | `cobbleverse.reward.claim`       | all      | `/rewards claim <id>`                    |
 | `cobbleverse.reward.preview`     | all      | `/rewards preview <id>`                  |
-| `cobbleverse.command.season`     | all      | `/season`                                |
+| `cobbleverse.command.season`     | all      | `/season`, `/season leaderboard`         |
 | `cobbleverse.season.progress`    | all      | `/season progress`                       |
+| `cobbleverse.command.events`     | all      | `/events`, `/event info \| leaderboard`  |
+| `cobbleverse.event.join`         | all      | `/event join <id>`                       |
+| `cobbleverse.event.leave`        | all      | `/event leave <id>`                      |
 
 ## Reserved namespace
 

@@ -3,6 +3,7 @@ package com.thamescape.cobbleverse.core.bootstrap;
 import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
+import com.thamescape.cobbleverse.core.event.EventService;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
@@ -89,5 +90,9 @@ public final class CoreServices {
 
     public static SeasonService seasons() {
         return registry().seasons();
+    }
+
+    public static EventService events() {
+        return registry().events();
     }
 }

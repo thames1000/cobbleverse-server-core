@@ -3,6 +3,36 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - Unreleased
+
+Events and leaderboards (first pass) — admin-driven event lifecycle to prove the state machine,
+participation, and completion rewards; plus season and event leaderboards.
+
+### Added
+- **Event system** (`event/`): `EventDefinition`, `EventService`, `EventRepository`, `EventState`
+  (DRAFT → SCHEDULED → OPEN → ACTIVE → COMPLETED, or CANCELLED), `EventParticipant`.
+  - **State machine** with validated transitions; illegal moves are rejected.
+  - **Participation**: players join open/active events; per-participant **score** for leaderboards.
+  - **Completion rewards**: completing an event grants each participant the event's rewards through
+    the central `RewardService` (dedup + offline queue inherited).
+- **Leaderboards**: `/event leaderboard <id>` and `/season leaderboard`, plus `/cvcore season top [n]`
+  (season points, using the V004 index).
+- **Commands**: `/events`, `/event info|join|leave|leaderboard`; `/cvcore event
+  list|open|start|complete|cancel|schedule <id>`, `/cvcore event addplayer <id> <player>`,
+  `/cvcore event score <id> <player> <amount>`.
+- **Config**: `events.json` (definitions, type, optional schedule, completion rewards) —
+  runtime-reloadable.
+- **Schema**: migration `V005` adds `events` and `event_participation` (with a leaderboard index).
+- **Permissions**: `cobbleverse.command.events`, `cobbleverse.event.join`, `cobbleverse.event.leave`,
+  `cobbleverse.admin.events`.
+- Audit types `EVENT_STATE_CHANGED`, `EVENT_JOINED`, `EVENT_LEFT` (plus existing `EVENT_STARTED`,
+  `EVENT_ENDED`).
+
+### Not yet included (deliberately)
+- Auto-scheduled transitions from `scheduledStart`/`scheduledEnd` (stored but not enforced) and
+  event-type-specific logic (safari/tournament/raid) — first pass proves the lifecycle with
+  admin-driven transitions.
+
 ## [0.4.0] - Unreleased
 
 Seasons and objectives (first pass) — manual/generic objectives to prove the season lifecycle,

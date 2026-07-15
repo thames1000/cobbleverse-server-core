@@ -17,6 +17,7 @@ public final class CorePermissions {
     public static final String COMMAND_PROFILE = "cobbleverse.command.profile";
     public static final String COMMAND_REWARDS = "cobbleverse.command.rewards";
     public static final String COMMAND_SEASON = "cobbleverse.command.season";
+    public static final String COMMAND_EVENTS = "cobbleverse.command.events";
 
     // Player-facing
     public static final String PROFILE_VIEW = "cobbleverse.profile.view";
@@ -25,6 +26,8 @@ public final class CorePermissions {
     public static final String REWARD_PREVIEW = "cobbleverse.reward.preview";
     public static final String SEASON_VIEW = "cobbleverse.season.view";
     public static final String SEASON_PROGRESS = "cobbleverse.season.progress";
+    public static final String EVENT_JOIN = "cobbleverse.event.join";
+    public static final String EVENT_LEAVE = "cobbleverse.event.leave";
 
     // Administrative actions
     public static final String ADMIN_RELOAD = "cobbleverse.admin.reload";
@@ -34,4 +37,5 @@ public final class CorePermissions {
     public static final String ADMIN_PLAYER = "cobbleverse.admin.player";
     public static final String ADMIN_REWARDS = "cobbleverse.admin.rewards";
     public static final String ADMIN_SEASON = "cobbleverse.admin.season";
+    public static final String ADMIN_EVENTS = "cobbleverse.admin.events";
 }

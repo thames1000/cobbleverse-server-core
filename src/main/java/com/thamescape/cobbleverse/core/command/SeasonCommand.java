@@ -38,7 +38,30 @@ public final class SeasonCommand {
                 .executes(SeasonCommand::overview)
                 .then(literal("progress")
                         .requires(perms.require(CorePermissions.SEASON_PROGRESS, 0))
-                        .executes(SeasonCommand::progress)));
+                        .executes(SeasonCommand::progress))
+                .then(literal("leaderboard")
+                        .executes(SeasonCommand::leaderboard)));
+    }
+
+    private static int leaderboard(CommandContext<ServerCommandSource> ctx) {
+        ServerCommandSource source = ctx.getSource();
+        SeasonDefinition def = CoreServices.seasons().activeDefinition().orElse(null);
+        if (def == null) {
+            source.sendError(Text.literal("No active season."));
+            return 0;
+        }
+        var top = CoreServices.seasons().leaderboard(def.id, 10);
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Season leaderboard — " + def.displayNameOrId())), false);
+        if (top.isEmpty()) {
+            line(source, "(no points yet)");
+            return 1;
+        }
+        int rank = 1;
+        for (var e : top) {
+            line(source, (rank++) + ". " + e.label() + " — " + e.points());
+        }
+        return 1;
     }
 
     private static int overview(CommandContext<ServerCommandSource> ctx) {

@@ -21,6 +21,11 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore season progress <player>` | `cobbleverse.admin.season` | op 4 | View a player's season progress   |
 | `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | op 4 | Adjust points (may be negative) |
 | `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | op 4 | Add objective progress |
+| `/cvcore season top [n]` | `cobbleverse.admin.season`  | op 4       | Season points leaderboard           |
+| `/cvcore event list`   | `cobbleverse.admin.events`   | op 4       | List events + state                 |
+| `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | op 4 | Drive event lifecycle |
+| `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | op 4 | Add a participant from console |
+| `/cvcore event score <id> <player> <amount>` | `cobbleverse.admin.events` | op 4 | Adjust a participant's score |
 
 ## Player commands
 
@@ -33,6 +38,12 @@ fallback) and, with no argument, runs `info`.
 | `/rewards preview <id>` | `cobbleverse.reward.preview` | all      | Dry-run: what a reward would grant       |
 | `/season`           | `cobbleverse.command.season`     | all      | Active season name, state, your points   |
 | `/season progress`  | `cobbleverse.season.progress`    | all      | Your objectives and next milestone       |
+| `/season leaderboard` | `cobbleverse.command.season`   | all      | Season points leaderboard                |
+| `/events`           | `cobbleverse.command.events`     | all      | List events and their state              |
+| `/event info <id>`  | `cobbleverse.command.events`     | all      | Event details + your participation       |
+| `/event join <id>`  | `cobbleverse.event.join`         | all      | Join an open/active event                |
+| `/event leave <id>` | `cobbleverse.event.leave`        | all      | Leave an event                           |
+| `/event leaderboard <id>` | `cobbleverse.command.events` | all     | Event score leaderboard                  |
 
 ## Reload scope
 

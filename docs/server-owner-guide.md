@@ -32,10 +32,10 @@ commands, integration detection, messaging, health checks, auditing — that *fu
 build on.
 
 If you installed it expecting gameplay features, that's expected: the visible surface so far is the
-`/cvcore`, `/profile`, `/rewards`, and `/season` commands, a startup report in the log, a SQLite
-database tracking player identity and playtime, a config-driven reward + currency system, and
-config-driven seasons with objectives and points milestones. More gameplay (events, and event-driven
-objective tracking) arrives as later versions and separate modules.
+`/cvcore`, `/profile`, `/rewards`, `/season`, and `/event` commands, a startup report in the log, a
+SQLite database tracking player identity and playtime, a config-driven reward + currency system,
+seasons with objectives and points milestones, and events with participation and leaderboards.
+Event-driven objective tracking (Cobblemon) and auto-scheduling arrive as later versions.
 
 ---
 
@@ -216,6 +216,25 @@ Defines seasons, their objectives, and points milestones. Which season is curren
 
 Runtime-reloadable with `/cvcore reload`. Full details in [seasons.md](seasons.md).
 
+### `events.json` (0.5.0)
+
+Defines events (lifecycle-managed activities players join; completion grants the listed rewards to
+every participant). A sample event is created on first run.
+
+```json
+{
+  "configVersion": 1,
+  "events": {
+    "summer_catchathon": {
+      "displayName": "Summer Catch-a-thon", "type": "catching",
+      "rewards": [ "summer_2026_tier_1" ]
+    }
+  }
+}
+```
+
+Runtime-reloadable with `/cvcore reload`. Full details in [events.md](events.md).
+
 ### Configuration rules (important)
 
 - **A broken config is never silently replaced.** If a file has invalid JSON, the mod backs it up as
@@ -256,6 +275,14 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore season progress <player>` | `cobbleverse.admin.season` | 4  | View a player's season progress           |
 | `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | 4 | Adjust a player's points (may be negative) |
 | `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | 4 | Add objective progress |
+| `/cvcore season top [n]` | `cobbleverse.admin.season`   | 4          | Season points leaderboard                 |
+| `/cvcore event list`   | `cobbleverse.admin.events`    | 4          | List events + state + participant count   |
+| `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | 4 | Drive event lifecycle |
+| `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | 4 | Add a participant from console        |
+| `/cvcore event score <id> <player> <amount>` | `cobbleverse.admin.events` | 4 | Adjust a participant's score      |
+| `/events`              | `cobbleverse.command.events`  | all        | List events and their state               |
+| `/event info\|join\|leave\|leaderboard <id>` | `cobbleverse.command.events` (join/leave gated) | all | Event info / join / leave / leaderboard |
+| `/season leaderboard`  | `cobbleverse.command.season`  | all        | Season points leaderboard                 |
 
 ### What `/cvcore reload` does — and does not — do
 
@@ -286,8 +313,12 @@ cobbleverse.admin.season       # /cvcore season ...                      (op-4 f
 cobbleverse.command.rewards    # /rewards                                (available to all)
 cobbleverse.reward.claim       # /rewards claim <id>                     (available to all)
 cobbleverse.reward.preview     # /rewards preview <id>                   (available to all)
+cobbleverse.admin.events       # /cvcore event ...                      (op-4 fallback)
 cobbleverse.command.season     # /season                                (available to all)
 cobbleverse.season.progress    # /season progress                       (available to all)
+cobbleverse.command.events     # /events, /event info | leaderboard     (available to all)
+cobbleverse.event.join         # /event join <id>                       (available to all)
+cobbleverse.event.leave        # /event leave <id>                      (available to all)
 cobbleverse.command.profile    # /profile (own)                          (available to all)
 cobbleverse.profile.view.other # /profile <player>                       (op-2 fallback)
 ```
@@ -392,9 +423,23 @@ award points; reaching a points milestone grants a reward.
   through the reward system (so it dedups and queues if the player is offline).
 - A season's state (upcoming / active / ended) is derived from its window; transitions are detected
   once a minute and on startup.
-- Check with `/season`, `/season progress`, and `/cvcore season info | progress <player>`.
+- Check with `/season`, `/season progress`, `/season leaderboard`, and `/cvcore season info`.
 
 See [seasons.md](seasons.md) for the full reference.
+
+### Events
+
+An event (`events.json`) is a lifecycle-managed activity players join; on completion, every
+participant receives the event's rewards.
+
+- **0.5.0 lifecycle is admin-driven** (`/cvcore event open|start|complete|cancel`); auto-scheduling
+  from configured times comes later. The state machine rejects illegal transitions.
+- Players join with `/event join <id>` (OPEN/ACTIVE); admins can add participants from console
+  (`/cvcore event addplayer`). Scores drive `/event leaderboard <id>`.
+- **Completing** an event grants each participant the event's rewards through the reward system — so
+  they dedup and queue for offline players.
+
+See [events.md](events.md) for the full reference and a console test flow.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 
@@ -529,6 +574,7 @@ update whichever of these applies:
 | A config field or file                | [§5](#5-configuration), `docs/configuration.md`     |
 | A reward type, currency, or template   | [§9](#9-day-to-day-operation), `docs/rewards.md`    |
 | A season, objective, or milestone      | [§9](#9-day-to-day-operation), `docs/seasons.md`    |
+| An event, its lifecycle, or scoring    | [§9](#9-day-to-day-operation), `docs/events.md`     |
 | An integration (added/removed/mod id) | [§8](#8-integrations), `docs/integrations.md`       |
 | Startup behaviour or the report       | [§4](#4-first-run--what-you-should-see), `docs/architecture.md` |
 | Anything user-visible                 | `CHANGELOG.md`                                      |

@@ -188,6 +188,32 @@ public final class ConfigValidator {
         return problems;
     }
 
+    /** Validates {@link EventsConfig}, returning a list of problems (empty if valid). */
+    public static List<String> validate(EventsConfig config) {
+        List<String> problems = new ArrayList<>();
+        if (config.configVersion <= 0 || config.configVersion > EventsConfig.CURRENT_VERSION) {
+            problems.add("events.json: configVersion " + config.configVersion + " is out of range");
+        }
+        if (config.events == null) {
+            problems.add("events.json: events must be present");
+            return problems;
+        }
+        for (var entry : config.events.entrySet()) {
+            String where = "events.json: event '" + entry.getKey() + "'";
+            var event = entry.getValue();
+            if (event.scheduledStart != null && !isValidDateTime(event.scheduledStart)) {
+                problems.add(where + ": scheduledStart is not a valid ISO offset date-time");
+            }
+            if (event.scheduledEnd != null && !isValidDateTime(event.scheduledEnd)) {
+                problems.add(where + ": scheduledEnd is not a valid ISO offset date-time");
+            }
+            if (event.rewards != null && event.rewards.stream().anyMatch(ConfigValidator::isBlank)) {
+                problems.add(where + ": rewards contains a blank reward id");
+            }
+        }
+        return problems;
+    }
+
     private static boolean isValidDateTime(String value) {
         if (isBlank(value)) {
             return false;
