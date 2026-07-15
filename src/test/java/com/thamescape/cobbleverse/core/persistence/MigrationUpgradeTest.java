@@ -2,6 +2,10 @@ package com.thamescape.cobbleverse.core.persistence;
 
 import com.thamescape.cobbleverse.core.persistence.migration.V001InitialSchema;
 import com.thamescape.cobbleverse.core.persistence.migration.V002RewardsAndCurrency;
+import com.thamescape.cobbleverse.core.persistence.migration.V003RewardRecovery;
+import com.thamescape.cobbleverse.core.persistence.migration.V004SeasonSchema;
+import com.thamescape.cobbleverse.core.persistence.migration.V005EventSchema;
+import com.thamescape.cobbleverse.core.persistence.repository.EventRepository;
 import com.thamescape.cobbleverse.core.persistence.repository.RewardRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -52,6 +56,34 @@ class MigrationUpgradeTest {
         boolean complete = db.callSync(conn -> repo.isComplete(conn, uuid, "legacy_reward"));
         try {
             assertTrue(complete, "pre-0.3.1 claims must be treated as COMPLETE after V003");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void v006DoesNotRedistributePreexistingCompletedEvents() {
+        DatabaseManager db = new DatabaseManager(new SqliteDatabaseProvider(tmp.resolve("core.db")));
+        db.init();
+
+        // Simulate a 0.5.0 database (schema v5) with an already-completed event (no distribution column).
+        new MigrationManager(List.of(new V001InitialSchema(), new V002RewardsAndCurrency(),
+                new V003RewardRecovery(), new V004SeasonSchema(), new V005EventSchema())).migrate(db);
+        db.runSync(conn -> {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO events(event_id, state, updated_at) VALUES ('old_event', 'COMPLETED', 1)")) {
+                ps.executeUpdate();
+            }
+        });
+
+        // Upgrade to current (V006 adds rewards_distributed, defaulting existing rows to 1 = done).
+        MigrationManager.withDefaults().migrate(db);
+
+        EventRepository events = new EventRepository();
+        List<String> pending = db.callSync(events::pendingRewardEventIds);
+        try {
+            assertTrue(pending.isEmpty(),
+                    "pre-0.5.1 completed events must be treated as already distributed after V006");
         } finally {
             db.close();
         }

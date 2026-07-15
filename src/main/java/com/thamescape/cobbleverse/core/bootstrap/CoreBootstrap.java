@@ -135,6 +135,7 @@ public final class CoreBootstrap {
         // 5d. Event system (admin-driven lifecycle in 0.5.0).
         EventService eventService = new EventService(configManager, databaseManager,
                 new EventRepository(), rewardService, auditService);
+        eventService.resumePendingDistributions(); // resume any reward distribution a crash interrupted
 
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();

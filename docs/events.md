@@ -61,6 +61,12 @@ Completing an event grants each participant every reward id in the definition, t
 `RewardService` — so they **dedup** (claim-once) and **queue** for offline players (delivered on their
 next join, with the retry/dead-letter safety net from 0.3.1).
 
+**Crash-safe (0.5.1):** completion marks the event `COMPLETED` and its distribution *pending* in one
+transaction, then distributes, then marks it *done*. If the server crashes mid-distribution, a
+startup sweep re-runs it for any `COMPLETED` event that didn't finish — and because grants are
+idempotent, already-rewarded participants are skipped. No participant is silently missed, and none is
+double-rewarded.
+
 ## Leaderboards
 
 - `/event leaderboard <id>` — top participants by score.
@@ -81,9 +87,12 @@ Names come from stored profiles (`last_known_name`); a player never seen shows a
 ## Storage (migration V005)
 
 ```
-events              (event_id, state, started_at, ended_at, updated_at)   PK(event_id)
-event_participation (event_id, uuid, joined_at, score)                    PK(event_id, uuid)
+events              (event_id, state, started_at, ended_at, updated_at, rewards_distributed)   PK(event_id)
+event_participation (event_id, uuid, joined_at, score)                                         PK(event_id, uuid)
 ```
+
+`rewards_distributed` (V006) is `0` while a completed event is still handing out rewards, `1` once
+done — the flag a startup resume checks.
 
 ## Console test flow (no login needed)
 

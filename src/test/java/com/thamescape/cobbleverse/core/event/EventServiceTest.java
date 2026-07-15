@@ -119,4 +119,72 @@ class EventServiceTest {
             db.close();
         }
     }
+
+    @Test
+    void addScoreIsAtomicAndClamps() {
+        events = build();
+        EventRepository repo = new EventRepository();
+        UUID uuid = UUID.randomUUID();
+        try {
+            db.runSync(conn -> repo.join(conn, EVENT, uuid, 1L));
+
+            var first = db.callSync(conn -> repo.addScore(conn, EVENT, uuid, 5)).orElseThrow();
+            assertEquals(0, first.oldScore());
+            assertEquals(5, first.newScore());
+
+            var second = db.callSync(conn -> repo.addScore(conn, EVENT, uuid, 7)).orElseThrow();
+            assertEquals(5, second.oldScore());
+            assertEquals(12, second.newScore());
+
+            var clamped = db.callSync(conn -> repo.addScore(conn, EVENT, uuid, -100)).orElseThrow();
+            assertEquals(0, clamped.newScore(), "score clamps at zero");
+
+            assertTrue(db.callSync(conn -> repo.addScore(conn, EVENT, UUID.randomUUID(), 5)).isEmpty(),
+                    "non-participant yields no change");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void resumesInterruptedRewardDistribution() {
+        events = build();
+        EventRepository repo = new EventRepository();
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        try {
+            db.runSync(conn -> {
+                repo.join(conn, EVENT, a, 1L);
+                repo.join(conn, EVENT, b, 1L);
+            });
+            // Simulate a crash: event marked COMPLETED with distribution pending, nothing granted yet.
+            db.runSync(conn -> {
+                repo.setState(conn, EVENT, "COMPLETED", null, 1L, 1L);
+                repo.setRewardsDistributed(conn, EVENT, false);
+            });
+            assertEquals(0L, db.callSync(rewardRepo::queueCount), "nothing distributed before resume");
+
+            assertEquals(1, events.resumePendingDistributions());
+            assertEquals(2L, db.callSync(rewardRepo::queueCount), "both participants' rewards queued on resume");
+            assertEquals(0, events.resumePendingDistributions(), "resume is a no-op once distributed");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void completedEventIsNotRedistributed() {
+        events = build();
+        UUID uuid = UUID.randomUUID();
+        try {
+            events.transition(EVENT, EventState.OPEN, "t");
+            events.join(uuid, EVENT);
+            events.transition(EVENT, EventState.ACTIVE, "t");
+            events.transition(EVENT, EventState.COMPLETED, "t"); // distributes and marks done
+            assertEquals(1L, db.callSync(rewardRepo::queueCount));
+            assertEquals(0, events.resumePendingDistributions(), "a fully-distributed event is not resumed");
+        } finally {
+            db.close();
+        }
+    }
 }
