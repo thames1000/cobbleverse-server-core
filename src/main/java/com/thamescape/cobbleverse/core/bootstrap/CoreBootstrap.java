@@ -45,9 +45,17 @@ import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 import com.thamescape.cobbleverse.core.scheduler.tasks.DatabaseFlushTask;
 import com.thamescape.cobbleverse.core.scheduler.tasks.PlaytimeUpdateTask;
 import com.thamescape.cobbleverse.core.scheduler.tasks.SeasonLifecycleTask;
+import com.thamescape.cobbleverse.core.persistence.repository.StatisticsRepository;
 import com.thamescape.cobbleverse.core.season.SeasonService;
+import com.thamescape.cobbleverse.core.season.objective.BattleWonObjectiveHandler;
+import com.thamescape.cobbleverse.core.season.objective.CaptureAnyObjectiveHandler;
+import com.thamescape.cobbleverse.core.season.objective.CaptureShinyObjectiveHandler;
+import com.thamescape.cobbleverse.core.season.objective.CaptureSpeciesObjectiveHandler;
 import com.thamescape.cobbleverse.core.season.objective.ManualObjectiveHandler;
 import com.thamescape.cobbleverse.core.season.objective.ObjectiveRegistry;
+import com.thamescape.cobbleverse.core.season.objective.SeasonObjectiveEventListener;
+import com.thamescape.cobbleverse.core.statistics.StatisticsGameEventListener;
+import com.thamescape.cobbleverse.core.statistics.StatisticsService;
 import com.thamescape.cobbleverse.core.util.ServerHolder;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -127,9 +135,14 @@ public final class CoreBootstrap {
         RewardService rewardService = buildRewardService(configManager, databaseManager,
                 auditService, currencyService);
 
-        // 5c. Season system. Objective handlers register in the ObjectiveRegistry (manual only in 0.4.0).
+        // 5c. Season system. Objective handlers register in the ObjectiveRegistry — manual plus the
+        // event-driven types (0.6.1), which are driven by game events via SeasonObjectiveEventListener.
         ObjectiveRegistry objectiveRegistry = new ObjectiveRegistry();
         objectiveRegistry.register(new ManualObjectiveHandler());
+        objectiveRegistry.register(new CaptureSpeciesObjectiveHandler());
+        objectiveRegistry.register(new CaptureShinyObjectiveHandler());
+        objectiveRegistry.register(new CaptureAnyObjectiveHandler());
+        objectiveRegistry.register(new BattleWonObjectiveHandler());
         SeasonService seasonService = new SeasonService(configManager, databaseManager,
                 new SeasonRepository(), rewardService, auditService, objectiveRegistry);
         seasonService.checkLifecycle(); // record initial lifecycle state on boot
@@ -149,6 +162,11 @@ public final class CoreBootstrap {
         } else {
             LOGGER.info("Cobblemon not present; game-event bridge idle");
         }
+
+        // 5f. Bus consumers (0.6.1): season objective auto-progress and player statistics.
+        StatisticsService statisticsService = new StatisticsService(databaseManager, new StatisticsRepository());
+        gameEventBus.register(new SeasonObjectiveEventListener(seasonService));
+        gameEventBus.register(new StatisticsGameEventListener(statisticsService));
 
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();
@@ -179,7 +197,8 @@ public final class CoreBootstrap {
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
                 auditService, healthCheckService, databaseManager, playerService, scheduler,
-                rewardService, currencyService, seasonService, eventService, gameEventBus);
+                rewardService, currencyService, seasonService, eventService, gameEventBus,
+                statisticsService);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.

@@ -3,6 +3,30 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - Unreleased
+
+The first real consumers of the game-event bus (0.6.0): event-driven season objectives and player
+statistics. Both are exercisable end-to-end with `/cvcore debug publish` — no Cobblemon needed.
+
+### Added
+- **Event-driven objectives**: objective handlers that advance season objectives from game events —
+  `capture_species` (field `species`), `capture_shiny`, `capture_any`, and `battle_won` (optional
+  field `battleKind`; wild captures excluded so they don't double-count). Registered in the
+  `ObjectiveRegistry`; `manual` still works for admin/other-module progress. A single
+  `SeasonObjectiveEventListener` bridges the bus to `SeasonService` — the only class coupling game
+  events to seasons.
+- **Player statistics** (`statistics/`): a key/value stats store (migration `V007`) updated from game
+  events by `StatisticsGameEventListener` — `captures`, `shinies`, `battles_won`, `sessions`.
+  `StatisticsService` (async increments, sync reads).
+- **Commands**: `/stats` (your own) and `/cvcore player stats <player>`.
+- **Permission**: `cobbleverse.command.stats`.
+- `CoreServices.statistics()` accessor.
+
+### Notes
+- Objective types are data-driven (config `type` + fields), matched by registered handlers — not a
+  Java enum — so new types add a handler without touching a central switch.
+- Season objective auto-progress only counts while the season is ACTIVE (existing gate).
+
 ## [0.6.0] - Unreleased
 
 Game-event ingestion layer — the backbone for turning game-world actions into reactions across

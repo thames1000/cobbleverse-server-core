@@ -21,6 +21,7 @@ com.thamescape.cobbleverse.core
 ├── season/                    seasons, objectives (objective/), progress, milestones
 ├── event/                     event lifecycle, participation, leaderboards
 ├── game/                      game-event bus + event types (ingestion layer)
+├── statistics/                per-player statistics (a bus consumer)
 ├── scheduler/                 tick-based repeating / one-shot tasks
 ├── integration/               runtime mod detection (per-mod subpackages)
 ├── audit/                     server-owned action log (+ audit_log table)

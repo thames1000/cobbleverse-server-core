@@ -91,9 +91,28 @@ season_lifecycle   (season_id, state, updated_at)                    PK(season_i
 Milestone reward claims live in the reward tables (`reward_claims`), so a milestone is granted once
 per player automatically.
 
-## Extending with event-driven objectives (later)
+## Event-driven objectives (0.6.1)
 
-`ObjectiveType` / `ObjectiveHandler` / `ObjectiveRegistry` are the seam. A future module registers a
-handler for, say, `catch_type`, subscribes to the relevant game event, and calls
-`SeasonService.addObjectiveProgress(...)` — no change to the season core. Register via
+Objectives can be **automatically advanced by game events** (via the game-event bus), not just by
+admins. Set the objective `type` and its matcher fields:
+
+| `type`             | Advances when…                          | Fields |
+|--------------------|-----------------------------------------|--------|
+| `manual`           | an admin/module adds progress           | — |
+| `capture_species`  | a matching species is captured          | `species` (case-insensitive) |
+| `capture_shiny`    | any shiny is captured                   | — |
+| `capture_any`      | any Pokémon is captured                 | — |
+| `battle_won`       | a (non-wild) battle is won              | `battleKind` (`pvp`/`pvn`/`pvw`; blank = any) |
+
+```json
+{ "id": "catch_water_25", "displayName": "Catch 25 Water Pokémon",
+  "type": "capture_species", "species": "magikarp", "required": 25, "points": 20 }
+```
+
+Auto-progress only counts while the season is **ACTIVE**. Wild captures do **not** count toward
+`battle_won` (they'd double-count with capture objectives). Types are data-driven and matched by
+registered handlers — adding a new type means registering an `ObjectiveHandler`, no central switch:
 `CoreServices.seasons().objectiveRegistry().register(handler)`.
+
+Since capture events aren't wired to real gameplay until you verify Cobblemon (0.6.0), test objective
+auto-progress now with `/cvcore debug publish capture <player> <species> [shiny]`.

@@ -18,6 +18,7 @@ public final class CommandRegistrar {
             RewardCommand.register(dispatcher);
             SeasonCommand.register(dispatcher);
             EventCommand.register(dispatcher);
+            StatsCommand.register(dispatcher);
         });
     }
 }

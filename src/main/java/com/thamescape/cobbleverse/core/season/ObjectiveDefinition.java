@@ -17,6 +17,12 @@ public class ObjectiveDefinition {
     /** Season points awarded on completion. */
     public int points = 0;
 
+    // Type-specific matchers (read by the relevant ObjectiveHandler; null/blank means "any").
+    /** {@code capture_species}: the species to match (case-insensitive). */
+    public String species;
+    /** {@code battle_won}: the battle kind to match ({@code pvp}/{@code pvn}/{@code pvw}); blank = any. */
+    public String battleKind;
+
     public String displayNameOrId() {
         return displayName == null || displayName.isBlank() ? id : displayName;
     }

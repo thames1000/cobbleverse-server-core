@@ -15,6 +15,7 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore debug publish capture <player> <species> [shiny]` | `cobbleverse.admin.debug` | op 4 | Inject a synthetic capture event |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
+| `/cvcore player stats <player>` | `cobbleverse.admin.player` | op 4 | View a player's statistics           |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`  | op 4  | List configured reward definitions        |
 | `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline)  |
 | `/cvcore reward retry <player> [id]` | `cobbleverse.admin.rewards` | op 4 | Revive dead-lettered rewards, re-deliver |
@@ -47,6 +48,7 @@ fallback) and, with no argument, runs `info`.
 | `/event join <id>`  | `cobbleverse.event.join`         | all      | Join an open/active event                |
 | `/event leave <id>` | `cobbleverse.event.leave`        | all      | Leave an event                           |
 | `/event leaderboard <id>` | `cobbleverse.command.events` | all     | Event score leaderboard                  |
+| `/stats`            | `cobbleverse.command.stats`      | all      | Your own statistics                      |
 
 ## Reload scope
 

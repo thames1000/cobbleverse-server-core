@@ -85,14 +85,21 @@ CoreServices.gameEvents().register(event -> {
 });
 ```
 
-This is the seam every later subsystem plugs into. 0.6.1 adds the first real consumers (objective
-handlers that turn `type: "manual"` objectives into `capture_species` etc., and player statistics).
+This is the seam every subsystem plugs into. As of **0.6.1** two real consumers are registered:
+
+- **`SeasonObjectiveEventListener`** — advances season objectives from game events (see
+  [seasons.md](seasons.md#event-driven-objectives-061)). The only class coupling game events to seasons.
+- **`StatisticsGameEventListener`** — updates player statistics (`captures`, `shinies`, `battles_won`,
+  `sessions`). View with `/stats` or `/cvcore player stats <player>`.
+
+Both are exercisable with `/cvcore debug publish capture <player> <species> [shiny]` — inject a capture
+and watch a season objective advance and the stat tick up, all without Cobblemon.
 
 ## Roadmap within 0.6.x
 
 | Version | Adds |
 |---------|------|
 | 0.6.0   | Bus, event contract, player events, real Cobblemon adapter (capture + battle), debug tooling |
-| 0.6.1   | Objective handlers (event-driven), player statistics |
+| 0.6.1   | Objective handlers (event-driven) + player statistics — **this release** |
 | 0.6.2   | Raid / evolution / breeding / fishing events |
 | 0.6.3   | Event replay, analytics |

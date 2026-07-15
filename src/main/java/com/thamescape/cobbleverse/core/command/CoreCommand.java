@@ -95,7 +95,11 @@ public final class CoreCommand {
                 .then(literal("create")
                         .then(argument("name", StringArgumentType.word())
                                 .executes(ctx -> playerCreate(ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "name"))))));
+                                        StringArgumentType.getString(ctx, "name")))))
+                .then(literal("stats")
+                        .then(argument("player", StringArgumentType.word())
+                                .executes(ctx -> playerStats(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player"))))));
 
         root.then(literal("reward")
                 .requires(perms.require(CorePermissions.ADMIN_REWARDS, CoreConstants.ADMIN_FALLBACK_LEVEL))
@@ -368,6 +372,11 @@ public final class CoreCommand {
             source.sendFeedback(() -> CoreServices.messages().prefix()
                     .append(Text.literal("Profile for " + name + " already exists (" + uuid + ")")), false);
         }
+    }
+
+    private static int playerStats(ServerCommandSource source, String playerName) {
+        withResolvedUuid(source, playerName, uuid -> StatsCommand.show(source, uuid, playerName));
+        return 1;
     }
 
     private static int rewardList(ServerCommandSource source) {
