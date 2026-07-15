@@ -67,6 +67,16 @@ startup sweep re-runs it for any `COMPLETED` event that didn't finish — and be
 idempotent, already-rewarded participants are skipped. No participant is silently missed, and none is
 double-rewarded.
 
+**Failure-aware (0.5.2):** an event is marked fully distributed **only if every grant** landed in an
+accepted terminal state (delivered, queued for offline delivery, or already claimed). If any grant
+fails, the event stays pending and retries on the next startup. A `COMPLETED` event whose definition
+is missing from `events.json` is **never** silently marked done — it stays pending with a loud
+`CV-EVENT-002` error, and reward loss requires an explicit `/cvcore event rewards abandon <id>`.
+
+> **Integrity:** each completion `reward` must reference an existing, **non-repeatable** reward
+> definition (validated at config load) — so replaying distribution after a crash can never
+> double-grant.
+
 ## Leaderboards
 
 - `/event leaderboard <id>` — top participants by score.
@@ -82,6 +92,7 @@ Names come from stored profiles (`last_known_name`); a player never seen shows a
 
 **Admins:** `/cvcore event list`, `/cvcore event open|start|complete|cancel|schedule <id>`,
 `/cvcore event addplayer <id> <player>`, `/cvcore event score <id> <player> <amount>`,
+`/cvcore event rewards abandon <id>` (explicitly drop a stuck pending distribution),
 `/cvcore season top [n]`.
 
 ## Storage (migration V005)

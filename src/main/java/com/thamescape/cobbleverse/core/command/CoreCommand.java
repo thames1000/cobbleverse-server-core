@@ -157,7 +157,14 @@ public final class CoreCommand {
                                                 .executes(ctx -> eventScore(ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "id"),
                                                         StringArgumentType.getString(ctx, "player"),
-                                                        IntegerArgumentType.getInteger(ctx, "amount"))))))));
+                                                        IntegerArgumentType.getInteger(ctx, "amount")))))))
+                .then(literal("rewards")
+                        .then(literal("abandon")
+                                .then(argument("id", StringArgumentType.word()).suggests(EventCommand.ID_SUGGESTIONS)
+                                        .executes(ctx -> EventCommand.report(ctx.getSource(),
+                                                CoreServices.events().abandonRewards(
+                                                        StringArgumentType.getString(ctx, "id"),
+                                                        "admin:" + ctx.getSource().getName())))))));
 
         dispatcher.register(root);
     }
@@ -380,11 +387,11 @@ public final class CoreCommand {
 
     private static int seasonInfo(ServerCommandSource source) {
         var seasons = CoreServices.seasons();
-        var def = seasons.activeDefinition().orElse(null);
+        var def = seasons.configuredSeason().orElse(null);
         source.sendFeedback(() -> CoreServices.messages().prefix()
                 .append(Text.literal("Season")), false);
         if (def == null) {
-            line(source, "active season: <none> (core.json activeSeason='" + seasons.activeSeasonId() + "')");
+            line(source, "active season: <none> (core.json activeSeason='" + seasons.configuredSeasonId() + "')");
             return 1;
         }
         line(source, "id: " + def.id + " (" + def.displayNameOrId() + ")");
@@ -482,7 +489,7 @@ public final class CoreCommand {
 
     @org.jetbrains.annotations.Nullable
     private static String activeSeasonOrError(ServerCommandSource source) {
-        var def = CoreServices.seasons().activeDefinition().orElse(null);
+        var def = CoreServices.seasons().configuredSeason().orElse(null);
         if (def == null) {
             source.sendError(Text.literal("No active season configured (see core.json activeSeason)."));
             return null;

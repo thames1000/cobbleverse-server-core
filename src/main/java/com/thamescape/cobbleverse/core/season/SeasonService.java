@@ -55,8 +55,13 @@ public final class SeasonService {
 
     // --- Definitions & state ----------------------------------------------------------------------
 
-    /** The season id the server considers current (from {@code core.json}). */
-    public String activeSeasonId() {
+    /**
+     * The season id the server is <b>configured</b> to feature (from {@code core.json}'s
+     * {@code activeSeason}). This is the current season by intent — it may not be in the
+     * {@link SeasonState#ACTIVE} state (it could be upcoming, ended, or disabled). Use
+     * {@link #isConfiguredSeasonActive()} to check the live state.
+     */
+    public String configuredSeasonId() {
         return config.core().activeSeason;
     }
 
@@ -66,8 +71,14 @@ public final class SeasonService {
                 : Optional.ofNullable(config.seasons().seasons.get(seasonId));
     }
 
-    public Optional<SeasonDefinition> activeDefinition() {
-        return definition(activeSeasonId());
+    /** The definition for the configured season (regardless of whether it is currently ACTIVE). */
+    public Optional<SeasonDefinition> configuredSeason() {
+        return definition(configuredSeasonId());
+    }
+
+    /** True if the configured season exists and is currently in the ACTIVE state. */
+    public boolean isConfiguredSeasonActive() {
+        return configuredSeason().map(def -> state(def) == SeasonState.ACTIVE).orElse(false);
     }
 
     public SeasonState state(SeasonDefinition def) {
@@ -108,21 +119,27 @@ public final class SeasonService {
 
     /**
      * Adds season points (which may be negative to correct a mistake, clamped at zero) and grants any
-     * milestones newly crossed. Returns the new total.
+     * milestones newly crossed. The read-and-write is one transaction, so the total is never lost or
+     * doubled by a concurrent change. Returns the new total.
      */
     public int addPoints(UUID uuid, String seasonId, int delta, String reason) {
-        int oldPoints = db.callSync(conn -> repository.points(conn, uuid, seasonId));
-        int newPoints = Math.max(0, oldPoints + delta);
-        db.runSync(conn -> repository.setPoints(conn, uuid, seasonId, newPoints));
+        int[] change = db.callInTransaction(conn -> {
+            int old = repository.points(conn, uuid, seasonId);
+            int updated = Math.max(0, old + delta);
+            repository.setPoints(conn, uuid, seasonId, updated);
+            return new int[]{old, updated};
+        });
         audit.record(AuditEntry.builder(AuditType.SEASON_POINTS_CHANGED)
-                .target(uuid).source(reason).context(seasonId + ": " + oldPoints + " -> " + newPoints));
-        definition(seasonId).ifPresent(def -> grantCrossedMilestones(uuid, def, oldPoints, newPoints));
-        return newPoints;
+                .target(uuid).source(reason).context(seasonId + ": " + change[0] + " -> " + change[1]));
+        definition(seasonId).ifPresent(def -> grantCrossedMilestones(uuid, def, change[0], change[1]));
+        return change[1];
     }
 
     /**
-     * Adds progress to an objective. On completion, awards the objective's points (which may in turn
-     * cross a milestone). No-op if the objective is already complete.
+     * Adds progress to an objective. Progress only counts while the season is ACTIVE. Progress is
+     * clamped to {@code [0, required]}. On completion, the objective is marked complete <b>and</b> its
+     * points are awarded in a single transaction (so a crash can't leave one without the other);
+     * milestone rewards are then granted (idempotently). No-op if already complete.
      */
     public ObjectiveResult addObjectiveProgress(UUID uuid, String seasonId, String objectiveId, int amount) {
         Optional<SeasonDefinition> def = definition(seasonId);
@@ -133,27 +150,46 @@ public final class SeasonService {
         if (objective.isEmpty()) {
             return new ObjectiveResult(ObjectiveResult.Status.UNKNOWN_OBJECTIVE, 0, false);
         }
-
-        ObjectiveProgress current = db.callSync(conn ->
-                repository.objective(conn, uuid, seasonId, objectiveId)).orElse(null);
-        if (current != null && current.completed()) {
-            return new ObjectiveResult(ObjectiveResult.Status.ALREADY_COMPLETE,
-                    current.progress(), true);
+        if (state(def.get()) != SeasonState.ACTIVE) {
+            return new ObjectiveResult(ObjectiveResult.Status.SEASON_NOT_ACTIVE, 0, false);
         }
 
         int required = objective.get().required;
-        int newProgress = Math.min(required, (current == null ? 0 : current.progress()) + amount);
-        boolean completed = newProgress >= required;
-        db.runSync(conn -> repository.setObjective(conn, uuid, seasonId, objectiveId, newProgress, completed));
+        int points = objective.get().points;
+        ObjectiveTxn txn = db.callInTransaction(conn -> {
+            ObjectiveProgress current = repository.objective(conn, uuid, seasonId, objectiveId).orElse(null);
+            if (current != null && current.completed()) {
+                return new ObjectiveTxn(ObjectiveResult.Status.ALREADY_COMPLETE, current.progress(), true, -1, -1);
+            }
+            int prev = current == null ? 0 : current.progress();
+            int newProgress = Math.max(0, Math.min(required, prev + amount));
+            boolean completed = newProgress >= required;
+            repository.setObjective(conn, uuid, seasonId, objectiveId, newProgress, completed);
+            int oldPoints = -1;
+            int newPoints = -1;
+            if (completed) {
+                oldPoints = repository.points(conn, uuid, seasonId);
+                newPoints = Math.max(0, oldPoints + points);
+                repository.setPoints(conn, uuid, seasonId, newPoints);
+            }
+            return new ObjectiveTxn(completed ? ObjectiveResult.Status.COMPLETED
+                    : ObjectiveResult.Status.PROGRESSED, newProgress, completed, oldPoints, newPoints);
+        });
 
-        if (completed) {
+        if (txn.status() == ObjectiveResult.Status.COMPLETED) {
             audit.record(AuditEntry.builder(AuditType.SEASON_OBJECTIVE_COMPLETED)
                     .target(uuid).source("season:" + seasonId).context(objectiveId));
+            audit.record(AuditEntry.builder(AuditType.SEASON_POINTS_CHANGED)
+                    .target(uuid).source("objective:" + objectiveId)
+                    .context(seasonId + ": " + txn.oldPoints() + " -> " + txn.newPoints()));
             LOGGER.info("Player {} completed objective '{}' in season '{}'", uuid, objectiveId, seasonId);
-            addPoints(uuid, seasonId, objective.get().points, "objective:" + objectiveId);
+            grantCrossedMilestones(uuid, def.get(), txn.oldPoints(), txn.newPoints());
         }
-        return new ObjectiveResult(completed ? ObjectiveResult.Status.COMPLETED : ObjectiveResult.Status.PROGRESSED,
-                newProgress, completed);
+        return new ObjectiveResult(txn.status(), txn.progress(), txn.completed());
+    }
+
+    private record ObjectiveTxn(ObjectiveResult.Status status, int progress, boolean completed,
+                                int oldPoints, int newPoints) {
     }
 
     private void grantCrossedMilestones(UUID uuid, SeasonDefinition def, int oldPoints, int newPoints) {
@@ -203,6 +239,8 @@ public final class SeasonService {
 
     /** Outcome of adding objective progress. */
     public record ObjectiveResult(Status status, int progress, boolean completed) {
-        public enum Status { PROGRESSED, COMPLETED, ALREADY_COMPLETE, UNKNOWN_SEASON, UNKNOWN_OBJECTIVE }
+        public enum Status {
+            PROGRESSED, COMPLETED, ALREADY_COMPLETE, SEASON_NOT_ACTIVE, UNKNOWN_SEASON, UNKNOWN_OBJECTIVE
+        }
     }
 }

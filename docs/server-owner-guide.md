@@ -280,6 +280,7 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | 4 | Drive event lifecycle |
 | `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | 4 | Add a participant from console        |
 | `/cvcore event score <id> <player> <amount>` | `cobbleverse.admin.events` | 4 | Adjust a participant's score      |
+| `/cvcore event rewards abandon <id>` | `cobbleverse.admin.events` | 4 | Drop a stuck pending reward distribution |
 | `/events`              | `cobbleverse.command.events`  | all        | List events and their state               |
 | `/event info\|join\|leave\|leaderboard <id>` | `cobbleverse.command.events` (join/leave gated) | all | Event info / join / leave / leaderboard |
 | `/season leaderboard`  | `cobbleverse.command.season`  | all        | Season points leaderboard                 |
@@ -438,6 +439,12 @@ participant receives the event's rewards.
   (`/cvcore event addplayer`). Scores drive `/event leaderboard <id>`.
 - **Completing** an event grants each participant the event's rewards through the reward system — so
   they dedup and queue for offline players.
+- **If distribution can't finish** (a grant fails, or an event's definition was removed) it stays
+  **pending** and retries on startup rather than losing rewards — surfaced by a `CV-EVENT` error in
+  the log. Drop a genuinely stuck one with `/cvcore event rewards abandon <id>`.
+- **Config integrity:** season milestone rewards and event completion rewards must point at an
+  existing, **non-repeatable** reward definition — the server refuses to start (or rejects a reload)
+  otherwise, with a clear message. This is what makes crash-recovery safe.
 
 See [events.md](events.md) for the full reference and a console test flow.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).

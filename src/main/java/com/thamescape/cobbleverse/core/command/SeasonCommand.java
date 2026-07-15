@@ -45,7 +45,7 @@ public final class SeasonCommand {
 
     private static int leaderboard(CommandContext<ServerCommandSource> ctx) {
         ServerCommandSource source = ctx.getSource();
-        SeasonDefinition def = CoreServices.seasons().activeDefinition().orElse(null);
+        SeasonDefinition def = CoreServices.seasons().configuredSeason().orElse(null);
         if (def == null) {
             source.sendError(Text.literal("No active season."));
             return 0;
@@ -67,7 +67,7 @@ public final class SeasonCommand {
     private static int overview(CommandContext<ServerCommandSource> ctx) {
         ServerCommandSource source = ctx.getSource();
         SeasonService seasons = CoreServices.seasons();
-        SeasonDefinition def = seasons.activeDefinition().orElse(null);
+        SeasonDefinition def = seasons.configuredSeason().orElse(null);
         if (def == null) {
             source.sendFeedback(() -> CoreServices.messages().prefix()
                     .append(Text.literal("No active season.")), false);
@@ -97,7 +97,7 @@ public final class SeasonCommand {
                     + "Use /cvcore season progress <player>."));
             return 0;
         }
-        SeasonDefinition def = CoreServices.seasons().activeDefinition().orElse(null);
+        SeasonDefinition def = CoreServices.seasons().configuredSeason().orElse(null);
         if (def == null) {
             source.sendError(Text.literal("No active season."));
             return 0;
@@ -145,14 +145,14 @@ public final class SeasonCommand {
 
     /** Suggests objective ids from the active season (for the admin objective command). */
     public static java.util.List<String> activeObjectiveIds() {
-        return CoreServices.seasons().activeDefinition()
+        return CoreServices.seasons().configuredSeason()
                 .map(def -> def.objectives.stream().map(o -> o.id).toList())
                 .orElse(java.util.List.of());
     }
 
     /** Renders a player's UUID-based progress for the admin command. */
     public static void reportFor(ServerCommandSource source, UUID uuid) {
-        SeasonDefinition def = CoreServices.seasons().activeDefinition().orElse(null);
+        SeasonDefinition def = CoreServices.seasons().configuredSeason().orElse(null);
         if (def == null) {
             source.sendError(Text.literal("No active season."));
             return;

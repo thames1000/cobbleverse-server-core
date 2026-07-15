@@ -7,7 +7,9 @@ import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
 import com.thamescape.cobbleverse.core.persistence.TransactionManager;
 import com.thamescape.cobbleverse.core.persistence.repository.EventRepository;
+import com.thamescape.cobbleverse.core.reward.RewardResult;
 import com.thamescape.cobbleverse.core.reward.RewardService;
+import com.thamescape.cobbleverse.core.reward.RewardStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,9 +108,14 @@ public final class EventService {
         if (target == EventState.ACTIVE) {
             audit.record(AuditEntry.builder(AuditType.EVENT_STARTED).source(actor).context(eventId));
         } else if (target == EventState.COMPLETED) {
-            int granted = completeDistribution(def);
-            audit.record(AuditEntry.builder(AuditType.EVENT_ENDED)
-                    .source(actor).context(eventId + " (rewarded " + granted + " participant(s))"));
+            DistributionResult dist = completeDistribution(def);
+            AuditEntry.Builder ended = AuditEntry.builder(AuditType.EVENT_ENDED).source(actor)
+                    .context(eventId + " (rewarded " + dist.participants() + " participant(s)"
+                            + (dist.complete() ? ")" : ", " + dist.failures() + " grant(s) pending)"));
+            if (!dist.complete()) {
+                ended.failure(dist.failures() + " grant(s) not delivered; distribution pending");
+            }
+            audit.record(ended);
         } else if (target == EventState.CANCELLED) {
             audit.record(AuditEntry.builder(AuditType.EVENT_ENDED).source(actor).context(eventId + " (cancelled)"));
         }
@@ -117,37 +124,89 @@ public final class EventService {
 
     /**
      * Re-runs reward distribution for any event that completed but did not finish rewarding (e.g. the
-     * server crashed mid-distribution). Safe because {@code grant()} is idempotent. Called on startup.
+     * server crashed mid-distribution). Safe because {@code grant()} is idempotent. Missing-definition
+     * events are left pending (never silently marked done). Called on startup.
      */
-    public int resumePendingDistributions() {
+    public ResumeSummary resumePendingDistributions() {
         List<String> pending = db.callSync(repository::pendingRewardEventIds);
+        int completed = 0;
+        int stillPending = 0;
+        int missingDefinition = 0;
         for (String eventId : pending) {
             EventDefinition def = config.events().events.get(eventId);
-            if (def != null) {
-                LOGGER.warn("Resuming interrupted reward distribution for event '{}'", eventId);
-                completeDistribution(def);
+            if (def == null) {
+                missingDefinition++;
+                LOGGER.error("[CV-EVENT-002] Completed event '{}' has pending rewards but no definition "
+                        + "in events.json; distribution stays PENDING until the definition is restored, "
+                        + "or an admin runs '/cvcore event rewards abandon {}'", eventId, eventId);
+                continue;
+            }
+            LOGGER.warn("Resuming interrupted reward distribution for event '{}'", eventId);
+            if (completeDistribution(def).complete()) {
+                completed++;
             } else {
-                LOGGER.warn("Completed event '{}' has no definition; marking rewards distributed", eventId);
-                db.runSync(conn -> repository.setRewardsDistributed(conn, eventId, true));
+                stillPending++;
             }
         }
-        return pending.size();
+        if (!pending.isEmpty()) {
+            LOGGER.info("Event reward resume: {} found, {} completed, {} still pending, {} missing definition",
+                    pending.size(), completed, stillPending, missingDefinition);
+        }
+        return new ResumeSummary(pending.size(), completed, stillPending, missingDefinition);
     }
 
-    /** Distributes rewards to all participants, then marks the event's distribution complete. */
-    private int completeDistribution(EventDefinition def) {
+    /** Explicitly abandons a pending event's reward distribution (admin action). */
+    public Result abandonRewards(String eventId, String actor) {
+        db.runSync(conn -> repository.setRewardsDistributed(conn, eventId, true));
+        audit.record(AuditEntry.builder(AuditType.EVENT_STATE_CHANGED)
+                .source(actor).context(eventId + ": reward distribution abandoned"));
+        LOGGER.warn("Event '{}' reward distribution abandoned by {}", eventId, actor);
+        return Result.ok("abandoned pending reward distribution for '" + eventId + "'");
+    }
+
+    /**
+     * Distributes rewards to all participants. Marks the event's distribution complete <b>only if</b>
+     * every grant landed in an accepted terminal state (delivered, queued for offline delivery, or
+     * already claimed). If any grant failed, the event stays pending so the next startup retries it.
+     */
+    private DistributionResult completeDistribution(EventDefinition def) {
         List<EventParticipant> participants = db.callSync(conn -> repository.participants(conn, def.id));
-        if (!def.rewards.isEmpty()) {
-            for (EventParticipant participant : participants) {
-                for (String rewardId : def.rewards) {
-                    rewards.grant(participant.uuid(), rewardId, "event:" + def.id);
+        int failures = 0;
+        for (EventParticipant participant : participants) {
+            for (String rewardId : def.rewards) {
+                RewardResult result = rewards.grant(participant.uuid(), rewardId, "event:" + def.id);
+                if (!isAccepted(result.status())) {
+                    failures++;
+                    LOGGER.warn("Event '{}' reward '{}' to {} not delivered: {} ({})",
+                            def.id, rewardId, participant.uuid(), result.status(), result.message());
                 }
             }
         }
-        db.runSync(conn -> repository.setRewardsDistributed(conn, def.id, true));
-        LOGGER.info("Event '{}' distributed {} reward(s) to {} participant(s)",
-                def.id, def.rewards.size(), participants.size());
-        return participants.size();
+        boolean complete = failures == 0;
+        if (complete) {
+            db.runSync(conn -> repository.setRewardsDistributed(conn, def.id, true));
+            LOGGER.info("Event '{}' distributed {} reward(s) to {} participant(s)",
+                    def.id, def.rewards.size(), participants.size());
+        } else {
+            LOGGER.error("[CV-EVENT-001] Event '{}' distribution incomplete: {} grant(s) failed; "
+                    + "distribution stays PENDING (retried on next startup, or abandon with "
+                    + "'/cvcore event rewards abandon {}')", def.id, failures, def.id);
+        }
+        return new DistributionResult(participants.size(), complete, failures);
+    }
+
+    private static boolean isAccepted(RewardStatus status) {
+        return status == RewardStatus.SUCCESS
+                || status == RewardStatus.QUEUED
+                || status == RewardStatus.ALREADY_CLAIMED;
+    }
+
+    /** Outcome of one distribution pass. */
+    private record DistributionResult(int participants, boolean complete, int failures) {
+    }
+
+    /** Summary of a startup resume sweep. */
+    public record ResumeSummary(int found, int completed, int stillPending, int missingDefinition) {
     }
 
     // --- Participation ----------------------------------------------------------------------------

@@ -67,13 +67,17 @@ class SeasonServiceTest {
         return new SeasonService(config, db, new SeasonRepository(), rewards, audit, objectives);
     }
 
-    private String activeSeasonJson() {
-        // One active season: objective needs 3 progress for 10 points; a milestone at 10 grants sample_tier_1.
+    private String seasonJson(int startDays, int endDays) {
+        // objective needs 3 progress for 10 points; a milestone at 10 grants sample_tier_1.
         return "{\"configVersion\":1,\"seasons\":{\"test_season\":{"
                 + "\"displayName\":\"Test\",\"enabled\":true,"
-                + "\"startsAt\":\"" + iso(-1) + "\",\"endsAt\":\"" + iso(1) + "\","
+                + "\"startsAt\":\"" + iso(startDays) + "\",\"endsAt\":\"" + iso(endDays) + "\","
                 + "\"objectives\":[{\"id\":\"obj1\",\"type\":\"manual\",\"required\":3,\"points\":10}],"
                 + "\"milestones\":[{\"points\":10,\"reward\":\"sample_tier_1\"}]}}}";
+    }
+
+    private String activeSeasonJson() {
+        return seasonJson(-1, 1);
     }
 
     @Test
@@ -112,6 +116,35 @@ class SeasonServiceTest {
             var third = seasons.addObjectiveProgress(uuid, "test_season", "obj1", 5);
             assertEquals(SeasonService.ObjectiveResult.Status.ALREADY_COMPLETE, third.status());
             assertEquals(10, seasons.points(uuid, "test_season"), "points unchanged after completion");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void objectiveProgressRequiresActiveSeason() throws IOException {
+        DatabaseManager db = openDb();
+        // Season is enabled but its window is in the past -> ENDED, not ACTIVE.
+        SeasonService seasons = seasonService(config("test_season", seasonJson(-2, -1)), db);
+        UUID uuid = UUID.randomUUID();
+        try {
+            var result = seasons.addObjectiveProgress(uuid, "test_season", "obj1", 3);
+            assertEquals(SeasonService.ObjectiveResult.Status.SEASON_NOT_ACTIVE, result.status());
+            assertEquals(0, seasons.points(uuid, "test_season"), "no points awarded outside an active season");
+        } finally {
+            db.close();
+        }
+    }
+
+    @Test
+    void objectiveProgressClampsAtZero() throws IOException {
+        DatabaseManager db = openDb();
+        SeasonService seasons = seasonService(config("test_season", activeSeasonJson()), db);
+        UUID uuid = UUID.randomUUID();
+        try {
+            assertEquals(2, seasons.addObjectiveProgress(uuid, "test_season", "obj1", 2).progress());
+            // A negative correction cannot drive progress below zero.
+            assertEquals(0, seasons.addObjectiveProgress(uuid, "test_season", "obj1", -5).progress());
         } finally {
             db.close();
         }

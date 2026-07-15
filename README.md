@@ -12,11 +12,12 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.5.1 (Events + Leaderboards)
+## Status — 0.5.2 (Events + Leaderboards)
 
 Builds on seasons with lifecycle-managed events, participation, completion rewards, and season/event
-leaderboards (first pass: admin-driven lifecycle; 0.5.1 adds crash-resumable reward distribution and
-atomic score updates):
+leaderboards (admin-driven lifecycle). 0.5.1–0.5.2 harden transactionality: crash-resumable and
+failure-aware reward distribution, atomic season/event updates, active-season gating, and cross-config
+reward integrity:
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|

@@ -55,6 +55,13 @@ public final class ConfigManager {
         this.rewardsConfig = loadRewards();
         this.seasonsConfig = loadSeasons();
         this.eventsConfig = loadEvents();
+
+        List<String> crossProblems = ConfigValidator.validateCrossReferences(
+                rewardsConfig, seasonsConfig, eventsConfig);
+        if (!crossProblems.isEmpty()) {
+            throw new ConfigurationException("CV-CONFIG-020",
+                    "Invalid cross-config references:\n  - " + String.join("\n  - ", crossProblems));
+        }
     }
 
     private RewardsConfig loadRewards() {
@@ -142,6 +149,9 @@ public final class ConfigManager {
             LOGGER.warn("events.json reload rejected; keeping previous. {} problem(s).", eventProblems.size());
             problems.addAll(eventProblems);
         }
+
+        // Cross-config integrity across the now-live configs.
+        problems.addAll(ConfigValidator.validateCrossReferences(rewardsConfig, seasonsConfig, eventsConfig));
 
         return problems;
     }

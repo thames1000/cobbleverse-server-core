@@ -52,14 +52,25 @@ audited (`SEASON_CHANGED`).
 ## How progress works
 
 1. **Objective progress** is added (`/cvcore season objective <player> <objective> <amount>`, or by
-   another module calling `SeasonService.addObjectiveProgress`). Progress is capped at `required`.
-2. On **completion**, the objective's `points` are awarded and the objective is marked complete
-   (further progress is a no-op).
+   another module calling `SeasonService.addObjectiveProgress`). Progress only counts while the season
+   is **ACTIVE** (otherwise the call returns `SEASON_NOT_ACTIVE` and awards nothing), and is clamped to
+   `[0, required]`.
+2. On **completion**, the objective is marked complete **and** its `points` are awarded in a single
+   transaction (a crash can't leave one without the other). Further progress is a no-op.
 3. Awarding points that **cross a milestone** grants that milestone's reward via the central
    `RewardService` — so it dedups (claim-once) and queues if the player is offline. Milestone grants
    are idempotent, so they're safe to re-reach.
 
-Points can be adjusted directly by admins (`/cvcore season addpoints`, may be negative; clamped at 0).
+Points can be adjusted directly by admins (`/cvcore season addpoints`, may be negative; clamped at 0);
+the read-and-write is atomic.
+
+> **Integrity:** a milestone's `reward` must reference an existing, **non-repeatable** reward
+> definition — validated when config loads. This keeps milestone re-crossing from ever granting a
+> reward twice.
+
+> **"Configured" vs "active":** `core.json`'s `activeSeason` names the *configured* current season,
+> which may be upcoming, ended, or disabled. Its live state is derived from the window; only an
+> `ACTIVE` season accrues objective progress.
 
 ## Commands
 

@@ -3,6 +3,41 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - Unreleased
+
+Season + event hardening (from code review) — transactionality, integrity, and recovery correctness.
+
+### Fixed / Changed — Seasons
+- **Atomic objective completion**: marking an objective complete and awarding its points now happen in
+  one transaction, so a crash can't leave one without the other.
+- **Atomic point changes**: `addPoints` reads and writes in one transaction.
+- **Objective progress requires an ACTIVE season** — progress outside the active window returns
+  `SEASON_NOT_ACTIVE` and awards nothing.
+- **Objective progress clamps to `[0, required]`** (a negative correction can no longer go below zero).
+- **Reversed season dates rejected**: `endsAt` must be after `startsAt`.
+- **Clearer naming**: `configuredSeasonId()` / `configuredSeason()` (the season named by `core.json`,
+  which may not be live) plus `isConfiguredSeasonActive()`.
+
+### Fixed / Changed — Events
+- **Distribution isn't marked complete on failure**: a completed event is only marked fully
+  distributed when every grant landed in an accepted terminal state (delivered / queued / already
+  claimed). Otherwise it stays pending and retries on the next startup.
+- **Missing-definition events stay pending**: a `COMPLETED` event with no definition in `events.json`
+  is no longer silently marked done — it stays pending with a loud `CV-EVENT-002` error. Reward loss
+  now requires an explicit `/cvcore event rewards abandon <id>`.
+- **Structured resume**: `resumePendingDistributions()` reports found / completed / still-pending /
+  missing-definition counts.
+
+### Added
+- **Cross-config integrity**: season milestone rewards and event completion rewards must reference an
+  existing, **non-repeatable** reward definition (validated at load and reload) — closing the replay
+  double-grant risk the review flagged.
+- Command `/cvcore event rewards abandon <id>`.
+
+### Deferred (noted for later, per the review)
+- Per-player event reward delivery records (stronger than the whole-event model); transactional state
+  transitions (with auto-scheduling); granular `EVENT_REWARD_DISTRIBUTION_*` audit events.
+
 ## [0.5.1] - Unreleased
 
 Event hardening (from code review) — transactionality fixes.
