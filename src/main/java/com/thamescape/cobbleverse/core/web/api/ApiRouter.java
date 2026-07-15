@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 
 /**
  * Routes read-only API requests: enforces {@code GET}, checks the API key (every route except
@@ -29,11 +30,18 @@ public final class ApiRouter implements HttpHandler {
     private final ApiData data;
     private final byte[] apiKey;
     private final int leaderboardMaxLimit;
+    private final RateLimiter rateLimiter;
+    private final boolean trustForwardedFor;
+    private final Semaphore concurrency;
 
-    public ApiRouter(ApiData data, String apiKey, int leaderboardMaxLimit) {
+    public ApiRouter(ApiData data, String apiKey, int leaderboardMaxLimit,
+                     int maxConcurrentRequests, int rateLimitPerMinute, boolean trustForwardedFor) {
         this.data = data;
         this.apiKey = apiKey.getBytes(StandardCharsets.UTF_8);
         this.leaderboardMaxLimit = leaderboardMaxLimit;
+        this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+        this.trustForwardedFor = trustForwardedFor;
+        this.concurrency = new Semaphore(Math.max(1, maxConcurrentRequests));
     }
 
     @Override
@@ -44,15 +52,34 @@ public final class ApiRouter implements HttpHandler {
                 return;
             }
             String path = exchange.getRequestURI().getPath();
+            // Public liveness probe: no auth, no rate limit, no database, no concurrency permit — just
+            // "the process is up and answering", so an uptime monitor is never throttled. Detailed,
+            // DB-touching diagnostics live behind auth at /api/v1/health.
             if ("/health".equals(path)) {
-                send(exchange, 200, data.health());
+                JsonObject live = new JsonObject();
+                live.addProperty("status", "OK");
+                send(exchange, 200, live);
+                return;
+            }
+            if (!rateLimiter.tryAcquire(clientId(exchange), System.currentTimeMillis())) {
+                error(exchange, 429, "rate limit exceeded");
                 return;
             }
             if (!authorized(exchange)) {
                 error(exchange, 401, "missing or invalid API key");
                 return;
             }
-            route(exchange, path);
+            // Admission control: cap concurrent (DB-touching) work so a burst of API reads can't starve
+            // the shared database worker. Over the cap → 503 immediately rather than queueing.
+            if (!concurrency.tryAcquire()) {
+                error(exchange, 503, "server busy");
+                return;
+            }
+            try {
+                route(exchange, path);
+            } finally {
+                concurrency.release();
+            }
         } catch (BadRequestException e) {
             error(exchange, 400, e.getMessage());
         } catch (RuntimeException e) {
@@ -63,9 +90,23 @@ public final class ApiRouter implements HttpHandler {
         }
     }
 
+    private String clientId(HttpExchange exchange) {
+        if (trustForwardedFor) {
+            String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                int comma = forwarded.indexOf(',');
+                return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
+            }
+        }
+        var remote = exchange.getRemoteAddress();
+        return remote == null || remote.getAddress() == null
+                ? "unknown" : remote.getAddress().getHostAddress();
+    }
+
     private void route(HttpExchange exchange, String path) throws IOException {
         Map<String, String> query = parseQuery(exchange.getRequestURI().getRawQuery());
         switch (path) {
+            case "/api/v1/health" -> send(exchange, 200, data.health());
             case "/api/v1/season" -> respond(exchange, data.season(query.get("id")));
             case "/api/v1/leaderboard" ->
                     respond(exchange, data.leaderboard(query.get("season"), clampLimit(query.get("limit"))));
@@ -157,9 +198,13 @@ public final class ApiRouter implements HttpHandler {
         for (String pair : rawQuery.split("&")) {
             int eq = pair.indexOf('=');
             if (eq > 0) {
-                String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
-                String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
-                params.putIfAbsent(key, value);
+                try {
+                    String key = URLDecoder.decode(pair.substring(0, eq), StandardCharsets.UTF_8);
+                    String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+                    params.putIfAbsent(key, value);
+                } catch (IllegalArgumentException e) {
+                    throw new BadRequestException("malformed query encoding");
+                }
             }
         }
         return params;

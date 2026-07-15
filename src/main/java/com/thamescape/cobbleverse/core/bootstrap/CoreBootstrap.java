@@ -285,8 +285,12 @@ public final class CoreBootstrap {
         ApiServer apiServer = null;
         if (web.api.enabled) {
             ApiData data = new CoreApiData(CoreBootstrap::version, health, seasons, events, statistics, players);
-            ApiRouter router = new ApiRouter(data, web.api.apiKey, web.api.leaderboardMaxLimit);
-            apiServer = new ApiServer(web.api.bindAddress, web.api.port, router);
+            ApiRouter router = new ApiRouter(data, web.api.apiKey, web.api.leaderboardMaxLimit,
+                    web.api.maxConcurrentRequests, web.api.rateLimitPerMinute, web.api.trustForwardedFor);
+            // A few more handler threads than the concurrency permit, so overflow requests can still be
+            // answered promptly with 503 instead of waiting for a permit-holding thread.
+            int threads = web.api.maxConcurrentRequests + 4;
+            apiServer = new ApiServer(web.api.bindAddress, web.api.port, threads, router);
         }
         WebhookService webhookService = null;
         if (web.webhooks.enabled) {

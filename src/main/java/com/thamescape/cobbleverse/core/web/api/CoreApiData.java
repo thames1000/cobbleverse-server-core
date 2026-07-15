@@ -142,7 +142,11 @@ public final class CoreApiData implements ApiData {
     }
 
     @Override
+    @Nullable
     public JsonObject stats(UUID uuid) {
+        if (players.find(uuid).isEmpty()) {
+            return null; // consistent with /player: an unknown player is a 404, not a zero record
+        }
         JsonObject json = new JsonObject();
         json.addProperty("uuid", uuid.toString());
         json.add("stats", statsObject(uuid));

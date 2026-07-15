@@ -89,6 +89,12 @@ public final class ConfigValidator {
             if (api.leaderboardMaxLimit <= 0) {
                 problems.add("web.json: api.leaderboardMaxLimit must be positive");
             }
+            if (api.maxConcurrentRequests < 1 || api.maxConcurrentRequests > 64) {
+                problems.add("web.json: api.maxConcurrentRequests must be between 1 and 64");
+            }
+            if (api.rateLimitPerMinute < 0) {
+                problems.add("web.json: api.rateLimitPerMinute must not be negative (0 disables it)");
+            }
         }
 
         WebConfig.Webhooks hooks = config.webhooks;
@@ -104,6 +110,20 @@ public final class ConfigValidator {
             problems.addAll(validateSubscriptions(hooks));
         }
 
+        return problems;
+    }
+
+    /**
+     * Cross-config check between {@code web.json} and {@code core.json}: webhooks are fed by the audit
+     * stream, so enabling them while auditing is off would silently deliver nothing. Reject that combo
+     * loudly instead. Run at startup (web config is not runtime-reloadable).
+     */
+    public static List<String> validateWebDependencies(CoreConfig core, WebConfig web) {
+        List<String> problems = new ArrayList<>();
+        if (web.webhooks != null && web.webhooks.enabled && !core.enableAuditLog) {
+            problems.add("web.json: webhooks are enabled but core.json enableAuditLog is false — webhooks "
+                    + "are driven by the audit stream, so enable auditing or disable webhooks");
+        }
         return problems;
     }
 

@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -65,14 +66,25 @@ public final class WebhookDispatcher implements WebhookSink {
                     }
                     String reason = error != null ? error.toString() : ("HTTP " + response.statusCode());
                     if (attempt < maxRetries) {
-                        long delayMs = backoffMillis(attempt);
-                        scheduler.schedule(() -> attempt(name, url, body, attempt + 1),
-                                delayMs, TimeUnit.MILLISECONDS);
+                        scheduleRetry(name, url, body, attempt, reason);
                     } else {
                         LOGGER.warn("[CV-WEB-001] Webhook '{}' dropped after {} attempt(s): {}",
                                 name, attempt + 1, reason);
                     }
                 });
+    }
+
+    private void scheduleRetry(String name, String url, String body, int attempt, String reason) {
+        if (scheduler.isShutdown()) {
+            return; // shutting down; the in-flight retry is abandoned by design
+        }
+        try {
+            scheduler.schedule(() -> attempt(name, url, body, attempt + 1),
+                    backoffMillis(attempt), TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            // The dispatcher closed between the isShutdown() check and here; drop the retry quietly.
+            LOGGER.debug("Webhook '{}' retry cancelled by shutdown after: {}", name, reason);
+        }
     }
 
     private static long backoffMillis(int attempt) {

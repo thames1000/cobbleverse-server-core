@@ -85,6 +85,8 @@ public final class ConfigManager {
 
         WebConfig web = loader.loadOrCreate(WEB_FILE, WebConfig.class, WebConfig::defaults);
         throwIfInvalid("CV-CONFIG-022", "web.json", ConfigValidator.validate(web));
+        throwIfInvalid("CV-CONFIG-024", "web/audit dependency",
+                ConfigValidator.validateWebDependencies(core, web));
 
         throwIfInvalid("CV-CONFIG-020", "cross-config references",
                 ConfigValidator.validateCrossReferences(rewards, seasons, events));
