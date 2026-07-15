@@ -3,6 +3,34 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - Unreleased
+
+Game-event ingestion layer — the backbone for turning game-world actions into reactions across
+seasons, events, statistics, and future modules. This release builds the bus and its contract;
+consumers (objective handlers, statistics) arrive in 0.6.1.
+
+### Added
+- **Game-event bus** (`game/`): `GameEvent` (immutable-record contract: player, timestamp, type,
+  source, metadata), `GameEventListener`, and `GameEventBus` (synchronous, exception-isolated
+  dispatch; producers publish, consumers subscribe, neither imports the other).
+- **Event types**: `PlayerJoinedGameEvent`, `PlayerLeftGameEvent`, `PokemonCapturedGameEvent`,
+  `BattleWonGameEvent`.
+- **Player events are live**: the player lifecycle listener publishes `player_joined` / `player_left`
+  to the bus.
+- **Cobblemon adapter scaffold** (`integration/cobblemon/CobblemonGameEventAdapter`): the single class
+  that knows Cobblemon. Detects it and exposes the publish seam; the concrete capture/battle
+  subscription is wired in a follow-up compiled against a specific Cobblemon version.
+- **Debug tooling**: `/cvcore debug events on|off` (log every game event + attached listeners) and
+  `/cvcore debug publish capture <player> <species> [shiny]` (inject a synthetic event to exercise the
+  whole pipeline without Cobblemon). `/cvcore debug` now reports bus stats.
+- `CoreServices.gameEvents()` accessor.
+
+### Notes
+- Dispatch is synchronous for now; an async queue can slot in behind `publish()` later without
+  changing the producer/listener contracts.
+- The actual Cobblemon capture/battle publishing requires compiling the adapter against Cobblemon's
+  (Kotlin) event API and can only be verified on a live server — see docs/game-events.md.
+
 ## [0.5.2] - Unreleased
 
 Season + event hardening (from code review) — transactionality, integrity, and recovery correctness.

@@ -12,12 +12,12 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.5.2 (Events + Leaderboards)
+## Status — 0.6.0 (Game Event Bus)
 
-Builds on seasons with lifecycle-managed events, participation, completion rewards, and season/event
-leaderboards (admin-driven lifecycle). 0.5.1–0.5.2 harden transactionality: crash-resumable and
-failure-aware reward distribution, atomic season/event updates, active-season gating, and cross-config
-reward integrity:
+Starts the game-event ingestion layer: a central bus that game-world actions publish to and
+subsystems subscribe to. 0.6.0 ships the bus, event contract, live player events, a Cobblemon adapter
+scaffold, and debug/synthetic-publish tooling; consumers (objective handlers, statistics) land in
+0.6.1.
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -33,13 +33,14 @@ reward integrity:
 | Rewards           | Central service: validate, claim-once, offline queue + retry/dead-letter, preview |
 | Currencies        | `CurrencyProvider` abstraction: internal (DB) + CobbleDollars    |
 | Seasons           | Objectives, points, milestones (→ rewards), lifecycle detection |
-| **Events**        | **Lifecycle state machine, participation, completion rewards**   |
-| **Leaderboards**  | **Season points + event score (`/…leaderboard`, `/cvcore season top`)** |
+| Events            | Lifecycle state machine, participation, completion rewards       |
+| Leaderboards      | Season points + event score (`/…leaderboard`, `/cvcore season top`) |
+| **Game event bus**| **Publish/subscribe ingestion layer; player events live; Cobblemon adapter scaffold** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
-Event-driven objective tracking (Cobblemon) and web integration arrive later — see the
-[roadmap](#roadmap).
+Event-driven objective tracking + statistics (consumers of the bus) and web integration arrive next —
+see the [roadmap](#roadmap).
 
 ## Running a server?
 
@@ -97,11 +98,13 @@ error rather than being silently replaced.
 | 0.2.0   | Player profiles + SQLite |
 | 0.3.0   | Rewards + currency |
 | 0.4.0   | Seasons + objectives |
-| 0.5.0   | Events + leaderboards *(this release)* |
-| 0.6.0   | Cobblemon tracking |
+| 0.5.0   | Events + leaderboards |
+| 0.6.0   | Game event bus *(this release)* |
+| 0.6.1   | Objective handlers + statistics (bus consumers) |
 | 0.7.0   | Web integration |
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
 permissions, configuration, [rewards](docs/rewards.md), [seasons](docs/seasons.md),
-[events](docs/events.md), [database](docs/database.md) and integration details.
+[events](docs/events.md), [game events](docs/game-events.md), [database](docs/database.md) and
+integration details.

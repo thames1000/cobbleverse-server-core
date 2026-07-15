@@ -20,6 +20,7 @@ com.thamescape.cobbleverse.core
 ├── reward/                    reward service, handlers (type/), currency (currency/)
 ├── season/                    seasons, objectives (objective/), progress, milestones
 ├── event/                     event lifecycle, participation, leaderboards
+├── game/                      game-event bus + event types (ingestion layer)
 ├── scheduler/                 tick-based repeating / one-shot tasks
 ├── integration/               runtime mod detection (per-mod subpackages)
 ├── audit/                     server-owned action log (+ audit_log table)

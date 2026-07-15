@@ -4,6 +4,7 @@ import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
 import com.thamescape.cobbleverse.core.event.EventService;
+import com.thamescape.cobbleverse.core.game.GameEventBus;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
@@ -94,5 +95,9 @@ public final class CoreServices {
 
     public static EventService events() {
         return registry().events();
+    }
+
+    public static GameEventBus gameEvents() {
+        return registry().gameEvents();
     }
 }
