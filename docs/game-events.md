@@ -26,8 +26,14 @@ Battle win ────────┘                 ├─▶ Statistics list
 | `metadata()`   | type-specific details a generic consumer can read (e.g. `species`, `shiny`) |
 
 Event types in 0.6.0: `player_joined`, `player_left`, `pokemon_captured` (metadata: `species`, `shiny`),
-`battle_won` (metadata: `battleKind` = `pvp`/`pvn`/`pvw`, `format` = e.g. `singles`/`doubles`,
-`wildCapture`).
+`battle_won` (metadata: `battleKind` ∈ `{pvp, pvn, pvw, other}`, `format` — lowercased, e.g.
+`singles`/`doubles`, `wildCapture`).
+
+> **Note for consumers:** a successful **wild capture** fires *both* `pokemon_captured` **and**
+> `battle_won` with `wildCapture=true` (Cobblemon ends the encounter as a battle victory). Objective
+> handlers that count "battles won" should filter out `wildCapture=true` if they mean trainer battles.
+> `battleKind` and `format` are normalized by the core to stable lowercase values; consumers should not
+> depend on Cobblemon's raw casing.
 
 Dispatch is **synchronous and exception-isolated** — one listener throwing never stops the others or
 the producer. (An async queue can slot in behind `publish()` later without changing any contract.)
@@ -86,7 +92,7 @@ handlers that turn `type: "manual"` objectives into `capture_species` etc., and 
 
 | Version | Adds |
 |---------|------|
-| 0.6.0   | Bus, event contract, player events, Cobblemon adapter scaffold, debug tooling |
+| 0.6.0   | Bus, event contract, player events, real Cobblemon adapter (capture + battle), debug tooling |
 | 0.6.1   | Objective handlers (event-driven), player statistics |
 | 0.6.2   | Raid / evolution / breeding / fishing events |
 | 0.6.3   | Event replay, analytics |

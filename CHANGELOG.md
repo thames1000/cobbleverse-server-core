@@ -29,11 +29,20 @@ consumers (objective handlers, statistics) arrive in 0.6.1.
 - `CoreServices.gameEvents()` accessor.
 
 ### Fixed (from PR review)
+- **Atomic config publication**: all configuration is now one immutable `ConfigSnapshot` behind a
+  single `volatile` reference. A reload validates the whole candidate generation, then swaps it in one
+  assignment — a reader (including off-thread work) never observes a mix of new and old files.
 - **Atomic config reload**: `reload()` validates the entire candidate set (every file + cross-file
-  references) before swapping anything in; a rejected reload leaves the previous config live in full.
+  references) before swapping; a rejected reload leaves the previous config live in full.
+- **Normalized battle metadata**: `battle_won`'s `format` is lowercased (`Locale.ROOT`); `battleKind`
+  and `format` are documented as stable values consumers can rely on.
+- **Listener failures keep stack traces**: `GameEventBus` logs the exception object, not just its
+  message.
 - `GameEventBus.publish` documents that it isolates listener `Exception`s (not "never throws") and
   guards against a null event.
 - Debug logging is documented as built into the bus (not a listener); the count reads "consumer(s)".
+- Documented that a wild capture fires both `pokemon_captured` and `battle_won` (`wildCapture=true`),
+  so future consumers can avoid double-counting.
 
 ### Notes
 - Dispatch is synchronous for now; an async queue can slot in behind `publish()` later without

@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -53,7 +54,8 @@ public final class CobblemonGameEventAdapter {
         String kind = event.getBattle().isPvP() ? "pvp"
                 : event.getBattle().isPvN() ? "pvn"
                 : event.getBattle().isPvW() ? "pvw" : "other";
-        String format = event.getBattle().getFormat().getBattleType().getName();
+        // Normalize Cobblemon's format name to a stable, lowercase value for consumers.
+        String format = event.getBattle().getFormat().getBattleType().getName().toLowerCase(Locale.ROOT);
         boolean wildCapture = event.getWasWildCapture();
         for (BattleActor winner : event.getWinners()) {
             for (UUID uuid : winner.getPlayerUUIDs()) {

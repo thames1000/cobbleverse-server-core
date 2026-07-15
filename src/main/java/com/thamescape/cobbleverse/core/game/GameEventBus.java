@@ -66,8 +66,8 @@ public final class GameEventBus {
             try {
                 listener.onGameEvent(event);
             } catch (Exception e) {
-                LOGGER.warn("Game-event listener '{}' failed on {}: {}",
-                        listener.name(), event.type(), e.getMessage());
+                LOGGER.warn("Game-event listener '{}' failed on {}",
+                        listener.name(), event.type(), e);
             }
         }
     }
