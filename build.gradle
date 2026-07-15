@@ -1,6 +1,13 @@
 plugins {
     id 'fabric-loom' version '1.7-SNAPSHOT'
     id 'java'
+    id 'checkstyle'
+}
+
+checkstyle {
+    toolVersion = '10.18.2'
+    configFile = file('config/checkstyle/checkstyle.xml')
+    maxWarnings = 0
 }
 
 version = project.mod_version

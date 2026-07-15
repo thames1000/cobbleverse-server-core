@@ -50,6 +50,10 @@ between versions, and (since this is your own project) modify the code and cut y
 The remapped jar lands in `build/libs/`. Drop it into a Fabric **server**'s `mods/` folder alongside
 Fabric API. `fabric-permissions-api` is bundled (jar-in-jar), so no extra download is needed.
 
+`./gradlew build` also runs the test suite and **Checkstyle** linting (config in
+`config/checkstyle/checkstyle.xml`). Lint on its own: `./gradlew checkstyleMain checkstyleTest`.
+[CI](.github/workflows/ci.yml) runs lint + build + tests on every push and PR.
+
 ## Commands
 
 | Command                | Permission                     | Fallback | Purpose                          |

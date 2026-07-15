@@ -451,11 +451,14 @@ This is your project, so you'll be changing the code and cutting your own builds
 ./gradlew build
 ```
 Output: `build/libs/cobbleverse-server-core-<version>.jar`. Deploy that to your server's `mods/`.
+`./gradlew build` also runs the tests and Checkstyle linting.
 
-Run the tests on their own with:
+Run them on their own with:
 ```bash
-./gradlew test
+./gradlew test                          # tests only
+./gradlew checkstyleMain checkstyleTest # lint only
 ```
+CI (`.github/workflows/ci.yml`) runs lint + build + tests on every push and pull request.
 
 ### Where version numbers live
 Versioning uses [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
