@@ -9,7 +9,7 @@ public final class CaptureShinyObjectiveHandler implements ObjectiveHandler {
 
     @Override
     public String type() {
-        return "capture_shiny";
+        return ObjectiveType.CAPTURE_SHINY.id();
     }
 
     @Override

@@ -1,9 +1,9 @@
 # Seasons & Objectives
 
-Implemented in **0.4.0** (first pass). Seasons are time-boxed sets of objectives that award points;
-reaching a points milestone grants a reward. This first pass ships **manual** objectives — progress is
-set by admins or other modules — to prove the lifecycle, persistence, and reward wiring. Event-driven
-objectives (catches, battles, raids) register handlers in a later version.
+Implemented in **0.4.0**, with **event-driven objectives added in 0.6.1**. Seasons are time-boxed sets
+of objectives that award points; reaching a points milestone grants a reward. Objectives can be
+**manual** (set by admins or other modules) or **game-event-driven** (captures, battle wins — see
+[Event-driven objectives](#event-driven-objectives-061)).
 
 ## Which season is active
 
@@ -32,8 +32,8 @@ audited (`SEASON_CHANGED`).
       "endsAt": "2026-08-01T00:00:00-04:00",
       "enabled": true,
       "objectives": [
-        { "id": "catch_water_25", "displayName": "Catch 25 Water Pokémon",
-          "type": "manual", "required": 25, "points": 20 }
+        { "id": "catch_25_shiny", "displayName": "Catch 25 shinies",
+          "type": "capture_shiny", "required": 25, "points": 20 }
       ],
       "milestones": [
         { "points": 20, "reward": "summer_2026_tier_1" },
@@ -105,7 +105,7 @@ admins. Set the objective `type` and its matcher fields:
 | `battle_won`       | a (non-wild) battle is won              | `battleKind` (`pvp`/`pvn`/`pvw`; blank = any) |
 
 ```json
-{ "id": "catch_water_25", "displayName": "Catch 25 Water Pokémon",
+{ "id": "catch_magikarp_25", "displayName": "Catch 25 Magikarp",
   "type": "capture_species", "species": "magikarp", "required": 25, "points": 20 }
 ```
 

@@ -185,11 +185,43 @@ public final class ConfigValidator {
                 if (objective.points < 0) {
                     problems.add(where + " objective '" + objective.id + "': points must not be negative");
                 }
+                problems.addAll(validateObjectiveType(where + " objective '" + objective.id + "'", objective));
             }
             for (var milestone : season.milestones) {
                 if (milestone.points < 0) {
                     problems.add(where + ": milestone points must not be negative");
                 }
+            }
+        }
+        return problems;
+    }
+
+    private static final java.util.Set<String> BATTLE_KINDS = java.util.Set.of("pvp", "pvn", "pvw");
+
+    /** Validates a season objective's {@code type} and the matcher fields that type requires. */
+    private static List<String> validateObjectiveType(
+            String where, com.thamescape.cobbleverse.core.season.ObjectiveDefinition objective) {
+        List<String> problems = new ArrayList<>();
+        var type = com.thamescape.cobbleverse.core.season.objective.ObjectiveType.fromId(objective.type);
+        if (type.isEmpty()) {
+            problems.add(where + ": unknown objective type '" + objective.type + "'");
+            return problems;
+        }
+        switch (type.get()) {
+            case CAPTURE_SPECIES -> {
+                if (isBlank(objective.species)) {
+                    problems.add(where + ": capture_species requires a non-blank 'species'");
+                }
+            }
+            case BATTLE_WON -> {
+                if (objective.battleKind != null && !objective.battleKind.isBlank()
+                        && !BATTLE_KINDS.contains(objective.battleKind.toLowerCase(java.util.Locale.ROOT))) {
+                    problems.add(where + ": battleKind must be one of pvp/pvn/pvw (or blank), was '"
+                            + objective.battleKind + "'");
+                }
+            }
+            default -> {
+                // manual / capture_shiny / capture_any need no matcher fields.
             }
         }
         return problems;

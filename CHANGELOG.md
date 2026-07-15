@@ -22,9 +22,21 @@ statistics. Both are exercisable end-to-end with `/cvcore debug publish` — no 
 - **Permission**: `cobbleverse.command.stats`.
 - `CoreServices.statistics()` accessor.
 
+### Fixed (from PR review)
+- **Objective processing no longer blocks the server thread**: `SeasonObjectiveEventListener` matches
+  handlers cheaply on the publishing thread, then hands all matching objectives to a single async job
+  (`SeasonService.advanceObjectivesAsync`). Database work runs on the DB worker; milestone reward
+  grants (which may deliver items / run commands) are marshalled back onto the server thread. Honors
+  the bus contract that listeners route database work off-thread. (+ non-blocking test)
+- **Strict objective validation**: unknown objective types (including typos), `capture_species`
+  without a `species`, and `battle_won` with a `battleKind` outside `pvp`/`pvn`/`pvw` now fail config
+  load with a clear error instead of silently never matching.
+- **Statistics failures keep stack traces** (log the throwable, matching the event bus).
+- seasons.md corrected (no longer "manual only"; the capture-species example is named accurately).
+
 ### Notes
-- Objective types are data-driven (config `type` + fields), matched by registered handlers — not a
-  Java enum — so new types add a handler without touching a central switch.
+- Objective types are data-driven (config `type` + fields), matched by registered handlers; the
+  `ObjectiveType` enum is the source of truth for config validation only.
 - Season objective auto-progress only counts while the season is ACTIVE (existing gate).
 
 ## [0.6.0] - Unreleased

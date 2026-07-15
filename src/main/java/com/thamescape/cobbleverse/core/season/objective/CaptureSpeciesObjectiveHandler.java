@@ -9,7 +9,7 @@ public final class CaptureSpeciesObjectiveHandler implements ObjectiveHandler {
 
     @Override
     public String type() {
-        return "capture_species";
+        return ObjectiveType.CAPTURE_SPECIES.id();
     }
 
     @Override

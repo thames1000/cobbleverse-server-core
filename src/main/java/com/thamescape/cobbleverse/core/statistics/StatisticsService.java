@@ -35,7 +35,7 @@ public final class StatisticsService {
     public void increment(UUID uuid, String stat, long delta) {
         db.runAsync(conn -> repository.increment(conn, uuid, stat, delta))
                 .exceptionally(t -> {
-                    LOGGER.warn("Failed to increment stat '{}' for {}: {}", stat, uuid, t.getMessage());
+                    LOGGER.warn("Failed to increment stat '{}' for {}", stat, uuid, t);
                     return null;
                 });
     }

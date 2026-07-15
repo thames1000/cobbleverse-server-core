@@ -79,6 +79,40 @@ class ConfigValidatorTest {
     }
 
     @Test
+    void unknownObjectiveTypeIsRejected() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        config.seasons.get("sample_season").objectives.get(0).type = "caputre_shiny"; // typo
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "a misspelled objective type must be flagged");
+    }
+
+    @Test
+    void captureSpeciesWithoutSpeciesIsRejected() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        var objective = config.seasons.get("sample_season").objectives.get(0);
+        objective.type = "capture_species";
+        objective.species = "";
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "capture_species needs a species");
+    }
+
+    @Test
+    void battleWonWithBadKindIsRejected() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        var objective = config.seasons.get("sample_season").objectives.get(0);
+        objective.type = "battle_won";
+        objective.battleKind = "trainer"; // not pvp/pvn/pvw
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "invalid battleKind must be flagged");
+    }
+
+    @Test
+    void validEventDrivenObjectiveIsAccepted() {
+        SeasonsConfig config = SeasonsConfig.defaults();
+        var objective = config.seasons.get("sample_season").objectives.get(0);
+        objective.type = "capture_species";
+        objective.species = "pikachu";
+        assertTrue(ConfigValidator.validate(config).isEmpty(), "a well-formed event objective is valid");
+    }
+
+    @Test
     void defaultsCrossValidateCleanly() {
         assertTrue(ConfigValidator.validateCrossReferences(
                 RewardsConfig.defaults(), SeasonsConfig.defaults(), EventsConfig.defaults()).isEmpty());

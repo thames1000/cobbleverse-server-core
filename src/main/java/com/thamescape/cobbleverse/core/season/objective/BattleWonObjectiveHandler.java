@@ -14,7 +14,7 @@ public final class BattleWonObjectiveHandler implements ObjectiveHandler {
 
     @Override
     public String type() {
-        return "battle_won";
+        return ObjectiveType.BATTLE_WON.id();
     }
 
     @Override

@@ -9,7 +9,7 @@ public final class CaptureAnyObjectiveHandler implements ObjectiveHandler {
 
     @Override
     public String type() {
-        return "capture_any";
+        return ObjectiveType.CAPTURE_ANY.id();
     }
 
     @Override

@@ -6,6 +6,8 @@ import com.thamescape.cobbleverse.core.season.ObjectiveDefinition;
 import com.thamescape.cobbleverse.core.season.SeasonDefinition;
 import com.thamescape.cobbleverse.core.season.SeasonService;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -37,7 +39,10 @@ public final class SeasonObjectiveEventListener implements GameEventListener {
         if (season == null) {
             return;
         }
+        // Match handlers on the current (server) thread — cheap, pure, no database. Any actual
+        // database/reward work is handed off to advanceObjectivesAsync so the tick never blocks.
         ObjectiveRegistry registry = seasons.objectiveRegistry();
+        List<SeasonService.ObjectiveMatch> matches = new ArrayList<>();
         for (ObjectiveDefinition objective : season.objectives) {
             ObjectiveHandler handler = registry.handler(objective.type).orElse(null);
             if (handler == null || handler.manual()) {
@@ -45,8 +50,9 @@ public final class SeasonObjectiveEventListener implements GameEventListener {
             }
             int amount = handler.progressFor(event, objective);
             if (amount > 0) {
-                seasons.addObjectiveProgress(uuid, season.id, objective.id, amount);
+                matches.add(new SeasonService.ObjectiveMatch(objective.id, amount));
             }
         }
+        seasons.advanceObjectivesAsync(uuid, season.id, matches);
     }
 }
