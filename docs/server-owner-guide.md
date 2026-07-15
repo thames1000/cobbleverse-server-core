@@ -257,7 +257,9 @@ Root command: `/cvcore`. With no argument it runs `info`.
 | `/cvcore health`       | `cobbleverse.command.cvcore` | 2           | Runs all health checks                    |
 | `/cvcore integrations` | `cobbleverse.command.cvcore` | 2           | Lists each integration and its status     |
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | 4           | Reloads **safe** config + re-detects integrations |
-| `/cvcore debug`        | `cobbleverse.admin.debug`    | 4           | Extended diagnostics                      |
+| `/cvcore debug`        | `cobbleverse.admin.debug`    | 4           | Extended diagnostics + game-event bus stats |
+| `/cvcore debug events on\|off` | `cobbleverse.admin.debug` | 4       | Log every game event (capture, join, ...) |
+| `/cvcore debug publish capture <player> <species> [shiny]` | `cobbleverse.admin.debug` | 4 | Inject a synthetic capture (test the pipeline) |
 | `/cvcore database status` | `cobbleverse.admin.database` | 4        | DB connection, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | 4      | Pre-create a profile for a player who hasn't joined |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`   | 4          | List configured reward definitions        |
@@ -447,6 +449,21 @@ participant receives the event's rewards.
   otherwise, with a clear message. This is what makes crash-recovery safe.
 
 See [events.md](events.md) for the full reference and a console test flow.
+
+### Game events (0.6.0)
+
+Game-world actions are published to a central **event bus** that subsystems subscribe to. In 0.6.0 the
+bus, the event contract, and **player join/leave events** are live; the first real consumers
+(objective handlers, statistics) arrive in 0.6.1.
+
+- **Cobblemon captures and battle wins are wired** (compiled against Cobblemon 1.7.3): with Cobblemon
+  installed they fire `pokemon_captured` / `battle_won` on the bus. Cobblemon stays **optional** — the
+  core runs without it, and `/cvcore debug` shows `cobblemon bridge: active|idle`. (The subscription is
+  compile-verified; confirm it fires live with `/cvcore debug events on` and a real capture.)
+- **Test the pipeline without Cobblemon**: `/cvcore debug events on`, then
+  `/cvcore debug publish capture <player> <species> [shiny]` — you'll see the event logged.
+
+See [game-events.md](game-events.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
   Ordinary player activity is not logged at INFO by design.
 
@@ -582,6 +599,7 @@ update whichever of these applies:
 | A reward type, currency, or template   | [§9](#9-day-to-day-operation), `docs/rewards.md`    |
 | A season, objective, or milestone      | [§9](#9-day-to-day-operation), `docs/seasons.md`    |
 | An event, its lifecycle, or scoring    | [§9](#9-day-to-day-operation), `docs/events.md`     |
+| A game event type or the bus           | [§9](#9-day-to-day-operation), `docs/game-events.md`|
 | An integration (added/removed/mod id) | [§8](#8-integrations), `docs/integrations.md`       |
 | Startup behaviour or the report       | [§4](#4-first-run--what-you-should-see), `docs/architecture.md` |
 | Anything user-visible                 | `CHANGELOG.md`                                      |

@@ -10,7 +10,9 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore health`       | `cobbleverse.command.cvcore` | op 2     | Runs all health checks; return code 0 if any ERROR |
 | `/cvcore integrations` | `cobbleverse.command.cvcore` | op 2     | Lists every integration and its status |
 | `/cvcore reload`       | `cobbleverse.admin.reload`   | op 4     | Reloads safe config + re-detects integrations |
-| `/cvcore debug`        | `cobbleverse.admin.debug`    | op 4     | Extended diagnostics (config dir, audit buffer, env) |
+| `/cvcore debug`        | `cobbleverse.admin.debug`    | op 4     | Extended diagnostics (config dir, audit buffer, env, bus stats) |
+| `/cvcore debug events on\|off` | `cobbleverse.admin.debug` | op 4 | Toggle game-event debug logging     |
+| `/cvcore debug publish capture <player> <species> [shiny]` | `cobbleverse.admin.debug` | op 4 | Inject a synthetic capture event |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`  | op 4  | List configured reward definitions        |

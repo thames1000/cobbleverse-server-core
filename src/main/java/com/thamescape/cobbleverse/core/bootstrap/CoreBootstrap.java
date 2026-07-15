@@ -14,6 +14,8 @@ import com.thamescape.cobbleverse.core.diagnostics.IntegrationHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.PermissionHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.SchedulerHealthCheck;
 import com.thamescape.cobbleverse.core.event.EventService;
+import com.thamescape.cobbleverse.core.game.GameEventBus;
+import com.thamescape.cobbleverse.core.integration.cobblemon.CobblemonGameEventAdapter;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.integration.IntegrationReport;
 import com.thamescape.cobbleverse.core.message.MessageService;
@@ -137,6 +139,17 @@ public final class CoreBootstrap {
                 new EventRepository(), rewardService, auditService);
         eventService.resumePendingDistributions(); // resume any reward distribution a crash interrupted
 
+        // 5e. Game-event ingestion bus (producers publish; consumers subscribe — 0.6.0).
+        GameEventBus gameEventBus = new GameEventBus();
+        // Cobblemon is optional: only touch the adapter (which imports Cobblemon classes) when the mod
+        // is actually installed, so the core loads and runs standalone without it.
+        boolean cobblemonBridgeActive = FabricLoader.getInstance().isModLoaded("cobblemon");
+        if (cobblemonBridgeActive) {
+            new CobblemonGameEventAdapter(gameEventBus).register();
+        } else {
+            LOGGER.info("Cobblemon not present; game-event bridge idle");
+        }
+
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();
         scheduler.init();
@@ -166,12 +179,12 @@ public final class CoreBootstrap {
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
                 auditService, healthCheckService, databaseManager, playerService, scheduler,
-                rewardService, currencyService, seasonService, eventService);
+                rewardService, currencyService, seasonService, eventService, gameEventBus);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.
         CommandRegistrar.register();
-        new PlayerLifecycleListener(playerService, rewardService).register();
+        new PlayerLifecycleListener(playerService, rewardService, gameEventBus).register();
 
         // 11. Print the startup report.
         new StartupReport(version(), databaseManager.describe(), core.activeSeason, false, reports).print();

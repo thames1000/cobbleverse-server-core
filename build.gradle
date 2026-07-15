@@ -23,6 +23,19 @@ repositories {
         name = 'Nucleoid'
         url = 'https://maven.nucleoid.xyz/'
     }
+    // Cobblemon (optional integration compiled against, never bundled)
+    maven {
+        name = 'Cobblemon'
+        url = 'https://maven.impactdev.net/repository/development/'
+    }
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/releases/'
+    }
+    maven {
+        name = 'Ladysnake'
+        url = 'https://maven.ladysnake.org/releases'
+    }
     mavenCentral()
 }
 
@@ -44,9 +57,14 @@ dependencies {
     include "org.xerial:sqlite-jdbc:${project.sqlite_jdbc_version}"
     modRuntimeOnly "org.xerial:sqlite-jdbc:${project.sqlite_jdbc_version}"
 
-    // NOTE: Integrations (Cobblemon, SkiesCrates, Ledger, CobbleDollars, HoloDisplays,
-    // PlaceholderAPI) are detected at runtime via the Fabric mod list. The core does NOT
-    // compile against them, so no compile dependency on those mods is required here.
+    // Cobblemon is an OPTIONAL integration: compiled against so the game-event adapter can call its
+    // event API, but never bundled and not required at runtime. The core runs standalone; the adapter
+    // only activates when Cobblemon is actually installed (gated by the Fabric mod list).
+    modCompileOnly "com.cobblemon:fabric:${project.cobblemon_version}"
+    modCompileOnly "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+
+    // NOTE: Other integrations (SkiesCrates, Ledger, CobbleDollars, HoloDisplays, PlaceholderAPI) are
+    // detected at runtime via the Fabric mod list; the core does not compile against them.
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'

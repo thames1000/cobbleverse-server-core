@@ -3,6 +3,53 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - Unreleased
+
+Game-event ingestion layer — the backbone for turning game-world actions into reactions across
+seasons, events, statistics, and future modules. This release builds the bus and its contract;
+consumers (objective handlers, statistics) arrive in 0.6.1.
+
+### Added
+- **Game-event bus** (`game/`): `GameEvent` (immutable-record contract: player, timestamp, type,
+  source, metadata), `GameEventListener`, and `GameEventBus` (synchronous, exception-isolated
+  dispatch; producers publish, consumers subscribe, neither imports the other).
+- **Event types**: `PlayerJoinedGameEvent`, `PlayerLeftGameEvent`, `PokemonCapturedGameEvent`,
+  `BattleWonGameEvent`.
+- **Player events are live**: the player lifecycle listener publishes `player_joined` / `player_left`
+  to the bus.
+- **Cobblemon adapter** (`integration/cobblemon/CobblemonGameEventAdapter`): the single class that
+  imports Cobblemon. Subscribes to Cobblemon's `POKEMON_CAPTURED` and `BATTLE_VICTORY` events and
+  republishes them as `pokemon_captured` (species, shiny) and `battle_won` (battle kind, format, wild
+  capture). Compiled against **Cobblemon 1.7.3+1.21.1** (`modCompileOnly`) — **not bundled, not
+  required at runtime**; the core runs standalone and the bridge activates only when Cobblemon is
+  installed (gated by the Fabric mod list; status via `/cvcore debug`).
+- **Debug tooling**: `/cvcore debug events on|off` (log every game event) and
+  `/cvcore debug publish capture <player> <species> [shiny]` (inject a synthetic event to test the
+  whole pipeline without Cobblemon). `/cvcore debug` reports bus stats + bridge status.
+- `CoreServices.gameEvents()` accessor.
+
+### Fixed (from PR review)
+- **Atomic config publication**: all configuration is now one immutable `ConfigSnapshot` behind a
+  single `volatile` reference. A reload validates the whole candidate generation, then swaps it in one
+  assignment — a reader (including off-thread work) never observes a mix of new and old files.
+- **Atomic config reload**: `reload()` validates the entire candidate set (every file + cross-file
+  references) before swapping; a rejected reload leaves the previous config live in full.
+- **Normalized battle metadata**: `battle_won`'s `format` is lowercased (`Locale.ROOT`); `battleKind`
+  and `format` are documented as stable values consumers can rely on.
+- **Listener failures keep stack traces**: `GameEventBus` logs the exception object, not just its
+  message.
+- `GameEventBus.publish` documents that it isolates listener `Exception`s (not "never throws") and
+  guards against a null event.
+- Debug logging is documented as built into the bus (not a listener); the count reads "consumer(s)".
+- Documented that a wild capture fires both `pokemon_captured` and `battle_won` (`wildCapture=true`),
+  so future consumers can avoid double-counting.
+
+### Notes
+- Dispatch is synchronous for now; an async queue can slot in behind `publish()` later without
+  changing the producer/listener contracts.
+- The Cobblemon subscription is compile-verified against the real 1.7.3 API but must be confirmed
+  firing on a live Cobblemon server — see docs/game-events.md.
+
 ## [0.5.2] - Unreleased
 
 Season + event hardening (from code review) — transactionality, integrity, and recovery correctness.

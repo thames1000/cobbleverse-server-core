@@ -4,6 +4,7 @@ import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
 import com.thamescape.cobbleverse.core.event.EventService;
+import com.thamescape.cobbleverse.core.game.GameEventBus;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.message.MessageService;
 import com.thamescape.cobbleverse.core.permission.PermissionService;
@@ -36,6 +37,7 @@ public final class ServiceRegistry {
     private final CurrencyService currencyService;
     private final SeasonService seasonService;
     private final EventService eventService;
+    private final GameEventBus gameEventBus;
 
     public ServiceRegistry(ConfigManager configManager,
                            PermissionService permissionService,
@@ -49,7 +51,8 @@ public final class ServiceRegistry {
                            RewardService rewardService,
                            CurrencyService currencyService,
                            SeasonService seasonService,
-                           EventService eventService) {
+                           EventService eventService,
+                           GameEventBus gameEventBus) {
         this.configManager = configManager;
         this.permissionService = permissionService;
         this.messageService = messageService;
@@ -63,6 +66,7 @@ public final class ServiceRegistry {
         this.currencyService = currencyService;
         this.seasonService = seasonService;
         this.eventService = eventService;
+        this.gameEventBus = gameEventBus;
     }
 
     public ConfigManager config() {
@@ -115,5 +119,9 @@ public final class ServiceRegistry {
 
     public EventService events() {
         return eventService;
+    }
+
+    public GameEventBus gameEvents() {
+        return gameEventBus;
     }
 }

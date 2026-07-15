@@ -2,6 +2,7 @@ package com.thamescape.cobbleverse.core.command;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -67,7 +68,22 @@ public final class CoreCommand {
 
         root.then(literal("debug")
                 .requires(perms.require(CorePermissions.ADMIN_DEBUG, CoreConstants.ADMIN_FALLBACK_LEVEL))
-                .executes(ctx -> debug(ctx.getSource())));
+                .executes(ctx -> debug(ctx.getSource()))
+                .then(literal("events")
+                        .then(literal("on").executes(ctx -> debugEvents(ctx.getSource(), true)))
+                        .then(literal("off").executes(ctx -> debugEvents(ctx.getSource(), false))))
+                .then(literal("publish")
+                        .then(literal("capture")
+                                .then(argument("player", StringArgumentType.word())
+                                        .then(argument("species", StringArgumentType.word())
+                                                .executes(ctx -> debugPublishCapture(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "player"),
+                                                        StringArgumentType.getString(ctx, "species"), false))
+                                                .then(argument("shiny", BoolArgumentType.bool())
+                                                        .executes(ctx -> debugPublishCapture(ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "player"),
+                                                                StringArgumentType.getString(ctx, "species"),
+                                                                BoolArgumentType.getBool(ctx, "shiny")))))))));
 
         root.then(literal("database")
                 .requires(perms.require(CorePermissions.ADMIN_DATABASE, CoreConstants.ADMIN_FALLBACK_LEVEL))
@@ -245,6 +261,30 @@ public final class CoreCommand {
         line(source, "recent audit entries: " + CoreServices.audit().recent().size());
         line(source, "config dir: " + CoreServices.config().loader().configDir());
         line(source, "loader: " + FabricLoader.getInstance().getEnvironmentType());
+        var bus = CoreServices.gameEvents();
+        line(source, "game events: " + bus.publishedCount() + " published, " + bus.listenerCount()
+                + " consumer(s), debug=" + bus.isDebug());
+        line(source, "cobblemon bridge: "
+                + (FabricLoader.getInstance().isModLoaded("cobblemon") ? "active" : "idle"));
+        return 1;
+    }
+
+    private static int debugEvents(ServerCommandSource source, boolean enabled) {
+        CoreServices.gameEvents().setDebug(enabled);
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Game-event debug logging " + (enabled ? "ON" : "OFF"))), false);
+        return 1;
+    }
+
+    private static int debugPublishCapture(ServerCommandSource source, String playerName,
+                                           String species, boolean shiny) {
+        withResolvedUuid(source, playerName, uuid -> {
+            CoreServices.gameEvents().publish(new com.thamescape.cobbleverse.core.game.capture
+                    .PokemonCapturedGameEvent(uuid, java.time.Instant.now(), species, shiny));
+            source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                    "Published synthetic capture: " + species + (shiny ? " (shiny)" : "")
+                            + " for " + playerName)), false);
+        });
         return 1;
     }
 

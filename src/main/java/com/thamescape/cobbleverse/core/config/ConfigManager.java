@@ -4,13 +4,19 @@ import com.thamescape.cobbleverse.core.util.error.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Owns the live core configuration and mediates loads and safe reloads.
+ * Owns the live configuration and mediates loads and safe reloads.
  *
- * <p>Only configuration that is safe to change at runtime is reloadable. Registries, world data,
- * database drivers and mixins are never touched here.
+ * <p>All configuration is held as one immutable {@link ConfigSnapshot} behind a single
+ * {@code volatile} reference, so publication is atomic: a reader (including off-thread database/reward
+ * work) always sees one coherent generation, never a mix of new and old files mid-reload.
+ *
+ * <p>Only {@code core.json}, {@code rewards.json}, {@code seasons.json} and {@code events.json} are
+ * runtime-reloadable. {@code database.json} is fixed at startup (changing the driver/file needs a
+ * restart), so a reload carries the live database config forward unchanged.
  */
 public final class ConfigManager {
 
@@ -22,194 +28,127 @@ public final class ConfigManager {
     private static final String EVENTS_FILE = "events.json";
 
     private final ConfigLoader loader;
-    private volatile CoreConfig coreConfig;
-    private volatile DatabaseConfig databaseConfig;
-    private volatile RewardsConfig rewardsConfig;
-    private volatile SeasonsConfig seasonsConfig;
-    private volatile EventsConfig eventsConfig;
+    private volatile ConfigSnapshot live;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
     }
 
-    /** Loads and validates all config from disk. Throws if anything is invalid. */
+    /** Loads and validates all config from disk, then publishes it as one snapshot. Throws if invalid. */
     public void load() {
-        CoreConfig loaded = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
-        List<String> problems = ConfigValidator.validate(loaded);
-        if (!problems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-010",
-                    "Invalid core.json:\n  - " + String.join("\n  - ", problems));
-        }
-        this.coreConfig = loaded;
-        LOGGER.info("Loaded core configuration (serverId={}, environment={})",
-                loaded.serverId, loaded.environment);
+        CoreConfig core = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
+        throwIfInvalid("CV-CONFIG-010", "core.json", ConfigValidator.validate(core));
 
-        DatabaseConfig db = loader.loadOrCreate(DATABASE_FILE, DatabaseConfig.class, DatabaseConfig::defaults);
-        List<String> dbProblems = ConfigValidator.validate(db);
-        if (!dbProblems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-012",
-                    "Invalid database.json:\n  - " + String.join("\n  - ", dbProblems));
-        }
-        this.databaseConfig = db;
+        DatabaseConfig database = loader.loadOrCreate(DATABASE_FILE, DatabaseConfig.class, DatabaseConfig::defaults);
+        throwIfInvalid("CV-CONFIG-012", "database.json", ConfigValidator.validate(database));
 
-        this.rewardsConfig = loadRewards();
-        this.seasonsConfig = loadSeasons();
-        this.eventsConfig = loadEvents();
-
-        List<String> crossProblems = ConfigValidator.validateCrossReferences(
-                rewardsConfig, seasonsConfig, eventsConfig);
-        if (!crossProblems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-020",
-                    "Invalid cross-config references:\n  - " + String.join("\n  - ", crossProblems));
-        }
-    }
-
-    private RewardsConfig loadRewards() {
         RewardsConfig rewards = loader.loadOrCreate(REWARDS_FILE, RewardsConfig.class, RewardsConfig::defaults);
-        List<String> problems = ConfigValidator.validate(rewards);
-        if (!problems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-014",
-                    "Invalid rewards.json:\n  - " + String.join("\n  - ", problems));
-        }
-        // Back-fill each definition's id from its map key (ids are not stored in the JSON body).
-        rewards.definitions.forEach((id, def) -> def.id = id);
-        return rewards;
-    }
+        throwIfInvalid("CV-CONFIG-014", "rewards.json", ConfigValidator.validate(rewards));
 
-    private SeasonsConfig loadSeasons() {
         SeasonsConfig seasons = loader.loadOrCreate(SEASONS_FILE, SeasonsConfig.class, SeasonsConfig::defaults);
-        List<String> problems = ConfigValidator.validate(seasons);
-        if (!problems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-016",
-                    "Invalid seasons.json:\n  - " + String.join("\n  - ", problems));
-        }
-        seasons.seasons.forEach((id, def) -> def.id = id);
-        return seasons;
-    }
+        throwIfInvalid("CV-CONFIG-016", "seasons.json", ConfigValidator.validate(seasons));
 
-    private EventsConfig loadEvents() {
         EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
-        List<String> problems = ConfigValidator.validate(events);
-        if (!problems.isEmpty()) {
-            throw new ConfigurationException("CV-CONFIG-018",
-                    "Invalid events.json:\n  - " + String.join("\n  - ", problems));
-        }
-        events.events.forEach((id, def) -> def.id = id);
-        return events;
+        throwIfInvalid("CV-CONFIG-018", "events.json", ConfigValidator.validate(events));
+
+        throwIfInvalid("CV-CONFIG-020", "cross-config references",
+                ConfigValidator.validateCrossReferences(rewards, seasons, events));
+
+        backfillIds(rewards, seasons, events);
+        this.live = new ConfigSnapshot(core, database, rewards, seasons, events);
+        LOGGER.info("Loaded configuration (serverId={}, environment={})", core.serverId, core.environment);
     }
 
     /**
-     * Re-reads config from disk and swaps it in only if valid. On failure the previous config stays
-     * active and the problems are returned so the caller can report them.
+     * Re-reads the runtime-reloadable files, validates the whole candidate generation (every file plus
+     * cross-references), and — only if all valid — publishes it in a single atomic assignment. On any
+     * problem, nothing changes (the previous snapshot stays live in full) and the problems are returned.
      *
      * @return list of validation problems; empty on success
      */
     public List<String> reload() {
-        List<String> problems = new java.util.ArrayList<>();
+        ConfigSnapshot current = live();
 
-        CoreConfig loaded = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
-        List<String> coreProblems = ConfigValidator.validate(loaded);
-        if (coreProblems.isEmpty()) {
-            this.coreConfig = loaded;
-            LOGGER.info("Reloaded core configuration");
-        } else {
-            LOGGER.warn("core.json reload rejected; keeping previous. {} problem(s).", coreProblems.size());
-            problems.addAll(coreProblems);
-        }
-
+        CoreConfig core = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
         RewardsConfig rewards = loader.loadOrCreate(REWARDS_FILE, RewardsConfig.class, RewardsConfig::defaults);
-        List<String> rewardProblems = ConfigValidator.validate(rewards);
-        if (rewardProblems.isEmpty()) {
-            rewards.definitions.forEach((id, def) -> def.id = id);
-            this.rewardsConfig = rewards;
-            LOGGER.info("Reloaded reward definitions ({})", rewards.definitions.size());
-        } else {
-            LOGGER.warn("rewards.json reload rejected; keeping previous. {} problem(s).", rewardProblems.size());
-            problems.addAll(rewardProblems);
-        }
-
         SeasonsConfig seasons = loader.loadOrCreate(SEASONS_FILE, SeasonsConfig.class, SeasonsConfig::defaults);
-        List<String> seasonProblems = ConfigValidator.validate(seasons);
-        if (seasonProblems.isEmpty()) {
-            seasons.seasons.forEach((id, def) -> def.id = id);
-            this.seasonsConfig = seasons;
-            LOGGER.info("Reloaded season definitions ({})", seasons.seasons.size());
-        } else {
-            LOGGER.warn("seasons.json reload rejected; keeping previous. {} problem(s).", seasonProblems.size());
-            problems.addAll(seasonProblems);
-        }
-
         EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
-        List<String> eventProblems = ConfigValidator.validate(events);
-        if (eventProblems.isEmpty()) {
-            events.events.forEach((id, def) -> def.id = id);
-            this.eventsConfig = events;
-            LOGGER.info("Reloaded event definitions ({})", events.events.size());
-        } else {
-            LOGGER.warn("events.json reload rejected; keeping previous. {} problem(s).", eventProblems.size());
-            problems.addAll(eventProblems);
+
+        List<String> problems = new ArrayList<>();
+        problems.addAll(ConfigValidator.validate(core));
+        problems.addAll(ConfigValidator.validate(rewards));
+        problems.addAll(ConfigValidator.validate(seasons));
+        problems.addAll(ConfigValidator.validate(events));
+        if (problems.isEmpty()) {
+            problems.addAll(ConfigValidator.validateCrossReferences(rewards, seasons, events));
+        }
+        if (!problems.isEmpty()) {
+            LOGGER.warn("Reload rejected; keeping previous config in full. {} problem(s).", problems.size());
+            return problems;
         }
 
-        // Cross-config integrity across the now-live configs.
-        problems.addAll(ConfigValidator.validateCrossReferences(rewardsConfig, seasonsConfig, eventsConfig));
-
+        backfillIds(rewards, seasons, events);
+        // Single atomic publication: one volatile write swaps the entire config generation.
+        this.live = new ConfigSnapshot(core, current.database(), rewards, seasons, events);
+        LOGGER.info("Reloaded configuration (rewards={}, seasons={}, events={})",
+                rewards.definitions.size(), seasons.seasons.size(), events.events.size());
         return problems;
     }
 
-    /** The current core config. Never null after {@link #load()} succeeds. */
+    /** The live snapshot. All accessors read through this so they see one coherent generation. */
+    public ConfigSnapshot snapshot() {
+        return live();
+    }
+
     public CoreConfig core() {
-        CoreConfig current = coreConfig;
-        if (current == null) {
-            throw new ConfigurationException("CV-CONFIG-011",
-                    "Core configuration accessed before load()");
-        }
-        return current;
+        return live().core();
     }
 
     /**
-     * The database config. Loaded once at startup and <b>not</b> runtime-reloadable — changing the
-     * driver or file requires a full restart, so {@link #reload()} deliberately leaves it untouched.
+     * The database config. Fixed at startup and <b>not</b> runtime-reloadable — a reload carries it
+     * forward unchanged; changing the driver or file requires a restart.
      */
     public DatabaseConfig database() {
-        DatabaseConfig current = databaseConfig;
-        if (current == null) {
-            throw new ConfigurationException("CV-CONFIG-013",
-                    "Database configuration accessed before load()");
-        }
-        return current;
+        return live().database();
     }
 
     /** The reward definitions and currency/template config. Runtime-reloadable. */
     public RewardsConfig rewards() {
-        RewardsConfig current = rewardsConfig;
-        if (current == null) {
-            throw new ConfigurationException("CV-CONFIG-015",
-                    "Rewards configuration accessed before load()");
-        }
-        return current;
+        return live().rewards();
     }
 
     /** The season definitions. Runtime-reloadable. */
     public SeasonsConfig seasons() {
-        SeasonsConfig current = seasonsConfig;
-        if (current == null) {
-            throw new ConfigurationException("CV-CONFIG-017",
-                    "Seasons configuration accessed before load()");
-        }
-        return current;
+        return live().seasons();
     }
 
     /** The event definitions. Runtime-reloadable. */
     public EventsConfig events() {
-        EventsConfig current = eventsConfig;
-        if (current == null) {
-            throw new ConfigurationException("CV-CONFIG-019",
-                    "Events configuration accessed before load()");
-        }
-        return current;
+        return live().events();
     }
 
     public ConfigLoader loader() {
         return loader;
+    }
+
+    private ConfigSnapshot live() {
+        ConfigSnapshot current = live;
+        if (current == null) {
+            throw new ConfigurationException("CV-CONFIG-011", "Configuration accessed before load()");
+        }
+        return current;
+    }
+
+    private static void throwIfInvalid(String code, String what, List<String> problems) {
+        if (!problems.isEmpty()) {
+            throw new ConfigurationException(code, "Invalid " + what + ":\n  - " + String.join("\n  - ", problems));
+        }
+    }
+
+    private static void backfillIds(RewardsConfig rewards, SeasonsConfig seasons, EventsConfig events) {
+        // Ids are the map keys, not stored in each JSON body.
+        rewards.definitions.forEach((id, def) -> def.id = id);
+        seasons.seasons.forEach((id, def) -> def.id = id);
+        events.events.forEach((id, def) -> def.id = id);
     }
 }
