@@ -63,6 +63,108 @@ public final class ConfigValidator {
         return problems;
     }
 
+    private static final java.util.Set<String> WEBHOOK_FORMATS = java.util.Set.of("generic", "discord");
+
+    /** Validates {@link WebConfig}, returning a list of problems (empty if valid). */
+    public static List<String> validate(WebConfig config) {
+        List<String> problems = new ArrayList<>();
+
+        if (config.configVersion <= 0 || config.configVersion > WebConfig.CURRENT_VERSION) {
+            problems.add("web.json: configVersion " + config.configVersion + " is out of range");
+        }
+
+        WebConfig.Api api = config.api;
+        if (api == null) {
+            problems.add("web.json: api section must be present");
+        } else if (api.enabled) {
+            if (api.port < 1 || api.port > 65535) {
+                problems.add("web.json: api.port " + api.port + " is out of range (1-65535)");
+            }
+            if (isBlank(api.bindAddress)) {
+                problems.add("web.json: api.bindAddress must not be blank when the API is enabled");
+            }
+            if (isBlank(api.apiKey)) {
+                problems.add("web.json: api.apiKey must be set (non-blank) when the API is enabled");
+            }
+            if (api.leaderboardMaxLimit <= 0) {
+                problems.add("web.json: api.leaderboardMaxLimit must be positive");
+            }
+        }
+
+        WebConfig.Webhooks hooks = config.webhooks;
+        if (hooks == null) {
+            problems.add("web.json: webhooks section must be present");
+        } else if (hooks.enabled) {
+            if (hooks.timeoutSeconds <= 0) {
+                problems.add("web.json: webhooks.timeoutSeconds must be positive");
+            }
+            if (hooks.maxRetries < 0) {
+                problems.add("web.json: webhooks.maxRetries must not be negative");
+            }
+            problems.addAll(validateSubscriptions(hooks));
+        }
+
+        return problems;
+    }
+
+    private static List<String> validateSubscriptions(WebConfig.Webhooks hooks) {
+        List<String> problems = new ArrayList<>();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (WebConfig.Subscription sub : hooks.subscriptions) {
+            String where = "web.json: webhook '" + (isBlank(sub.name) ? "<unnamed>" : sub.name) + "'";
+            if (isBlank(sub.name)) {
+                problems.add(where + ": name must not be blank");
+            } else if (!names.add(sub.name)) {
+                problems.add(where + ": duplicate webhook name");
+            }
+            if (!sub.enabled) {
+                continue; // a disabled subscription is not delivered, so its fields are not enforced
+            }
+            if (!isValidHttpUrl(sub.url)) {
+                problems.add(where + ": url must be a valid http(s) URL");
+            }
+            if (sub.format == null || !WEBHOOK_FORMATS.contains(sub.format.toLowerCase(java.util.Locale.ROOT))) {
+                problems.add(where + ": format must be one of " + WEBHOOK_FORMATS);
+            }
+            if (sub.events == null || sub.events.isEmpty()) {
+                problems.add(where + ": events must list at least one audit type (or \"*\")");
+            } else {
+                for (String event : sub.events) {
+                    if (!"*".equals(event) && parseAuditType(event) == null) {
+                        problems.add(where + ": unknown audit type '" + event + "' (use \"*\" for all)");
+                    }
+                }
+            }
+        }
+        return problems;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private static com.thamescape.cobbleverse.core.audit.AuditType parseAuditType(String name) {
+        if (name == null) {
+            return null;
+        }
+        try {
+            return com.thamescape.cobbleverse.core.audit.AuditType.valueOf(name.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static boolean isValidHttpUrl(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(value.trim());
+            String scheme = uri.getScheme();
+            return uri.getHost() != null
+                    && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     /** Validates {@link RewardsConfig}, returning a list of problems (empty if valid). */
     public static List<String> validate(RewardsConfig config) {
         List<String> problems = new ArrayList<>();

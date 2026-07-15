@@ -12,13 +12,17 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.6.1 (Game Event Bus + Consumers)
+## Status — 0.7.0 (Web Integration)
 
-The game-event ingestion layer plus its first real consumers. 0.6.0 shipped the bus, event contract,
-live player events, and a **real Cobblemon adapter** (capture + battle-win, compiled against Cobblemon
-1.7.3 as an optional dependency). 0.6.1 adds **event-driven season objectives** (`capture_species`,
-`capture_shiny`, `battle_won`, …) and **player statistics** — both driven by the bus and testable via
-`/cvcore debug publish`.
+Exposes the data the core already owns to the outside world, and pushes notable actions out. Two
+independent, **off-by-default** capabilities in `web.json`: a **read-only HTTP JSON API** (leaderboards,
+season/event state, player stats, health — loopback-bound and API-key protected) and **outbound
+webhooks** (selected audited actions forwarded to Discord/ops endpoints, `generic` or `discord` shape).
+No new runtime dependencies — the JDK's built-in HTTP server and client. See
+[web integration](docs/web-integration.md).
+
+Prior: 0.6.0 shipped the game-event bus + a real Cobblemon adapter; 0.6.1 added event-driven season
+objectives and player statistics.
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -37,7 +41,9 @@ live player events, and a **real Cobblemon adapter** (capture + battle-win, comp
 | Events            | Lifecycle state machine, participation, completion rewards       |
 | Leaderboards      | Season points + event score (`/…leaderboard`, `/cvcore season top`) |
 | Game event bus    | Publish/subscribe ingestion layer; player events + Cobblemon capture/battle (optional dep) |
-| **Bus consumers** | **Event-driven season objectives + player statistics**          |
+| Bus consumers     | Event-driven season objectives + player statistics              |
+| **Web API**       | **Read-only HTTP JSON (leaderboards, season/event, player, stats, health); key-auth, loopback default** |
+| **Webhooks**      | **Selected audited actions pushed to HTTP endpoints (generic / Discord)** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
@@ -102,11 +108,11 @@ error rather than being silently replaced.
 | 0.4.0   | Seasons + objectives |
 | 0.5.0   | Events + leaderboards |
 | 0.6.0   | Game event bus |
-| 0.6.1   | Objective handlers + statistics (bus consumers) *(this release)* |
-| 0.7.0   | Web integration |
+| 0.6.1   | Objective handlers + statistics (bus consumers) |
+| 0.7.0   | Web integration (HTTP API + webhooks) *(this release)* |
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
 permissions, configuration, [rewards](docs/rewards.md), [seasons](docs/seasons.md),
-[events](docs/events.md), [game events](docs/game-events.md), [database](docs/database.md) and
-integration details.
+[events](docs/events.md), [game events](docs/game-events.md), [web integration](docs/web-integration.md),
+[database](docs/database.md) and integration details.

@@ -219,7 +219,20 @@ public final class CoreCommand {
         line(source, "Storage: " + storageLabel());
         line(source, "Active season: " + (config.activeSeason.isBlank() ? "<none>" : config.activeSeason));
         line(source, "Integrations: " + available + " available");
+        line(source, "Web: " + webStatusLabel());
         return 1;
+    }
+
+    private static String webStatusLabel() {
+        var web = CoreServices.web();
+        String api = web.apiEnabled()
+                ? "API " + (web.apiRunning() ? "on" : "pending") + " @ "
+                        + web.apiBindAddress() + ":" + web.apiPort()
+                : "API off";
+        String hooks = web.webhooksEnabled()
+                ? "webhooks on (" + web.activeWebhooks() + ")"
+                : "webhooks off";
+        return api + ", " + hooks;
     }
 
     private static int health(ServerCommandSource source) {

@@ -8,6 +8,14 @@ import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.config.ConfigValidator;
 import com.thamescape.cobbleverse.core.config.CoreConfig;
 import com.thamescape.cobbleverse.core.config.DatabaseConfig;
+import com.thamescape.cobbleverse.core.config.WebConfig;
+import com.thamescape.cobbleverse.core.web.WebService;
+import com.thamescape.cobbleverse.core.web.api.ApiData;
+import com.thamescape.cobbleverse.core.web.api.ApiRouter;
+import com.thamescape.cobbleverse.core.web.api.ApiServer;
+import com.thamescape.cobbleverse.core.web.api.CoreApiData;
+import com.thamescape.cobbleverse.core.web.webhook.WebhookDispatcher;
+import com.thamescape.cobbleverse.core.web.webhook.WebhookService;
 import com.thamescape.cobbleverse.core.diagnostics.ConfigHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.DatabaseHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
@@ -197,16 +205,27 @@ public final class CoreBootstrap {
         healthCheckService.register(new PermissionHealthCheck(integrationManager));
         healthCheckService.register(new IntegrationHealthCheck(integrationManager));
 
-        // 8. Track the running server so components built here can reach it later.
-        ServerLifecycleEvents.SERVER_STARTED.register(ServerHolder::set);
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> ServerHolder.clear());
+        // 7b. Web integration (0.7.0): read-only HTTP API + outbound webhooks. Both off by default; each
+        // is built only when its config section is enabled. The API binds on server start (step 8).
+        WebService webService = buildWebService(configManager.web(), healthCheckService, seasonService,
+                eventService, statisticsService, playerService, auditService);
+
+        // 8. Track the running server, and bind/unbind the web API alongside its lifecycle.
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            ServerHolder.set(server);
+            webService.start();
+        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            webService.stop();
+            ServerHolder.clear();
+        });
 
         // 9. Publish the service registry.
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
                 auditService, healthCheckService, databaseManager, playerService, scheduler,
                 rewardService, currencyService, seasonService, eventService, gameEventBus,
-                statisticsService);
+                statisticsService, webService);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.
@@ -253,6 +272,30 @@ public final class CoreBootstrap {
                 () -> config.rewards().templates.cosmetic, "value",
                 e -> e.value, e -> "cosmetic " + e.value));
         return new RewardService(config, db, new RewardRepository(), registry, audit);
+    }
+
+    /**
+     * Builds the web-integration services. The API server is created only when {@code api.enabled}; the
+     * webhook service only when {@code webhooks.enabled}, in which case it attaches to the audit stream
+     * here. Either may be null inside the returned {@link WebService}.
+     */
+    private static WebService buildWebService(WebConfig web, HealthCheckService health, SeasonService seasons,
+                                              EventService events, StatisticsService statistics,
+                                              PlayerProfileService players, AuditService audit) {
+        ApiServer apiServer = null;
+        if (web.api.enabled) {
+            ApiData data = new CoreApiData(CoreBootstrap::version, health, seasons, events, statistics, players);
+            ApiRouter router = new ApiRouter(data, web.api.apiKey, web.api.leaderboardMaxLimit);
+            apiServer = new ApiServer(web.api.bindAddress, web.api.port, router);
+        }
+        WebhookService webhookService = null;
+        if (web.webhooks.enabled) {
+            WebhookDispatcher dispatcher =
+                    new WebhookDispatcher(web.webhooks.timeoutSeconds, web.webhooks.maxRetries);
+            webhookService = new WebhookService(web.webhooks, dispatcher);
+            audit.addListener(webhookService::onAudit);
+        }
+        return new WebService(web, apiServer, webhookService);
     }
 
     private static DatabaseManager openDatabase(Path configDir, DatabaseConfig dbConfig) {

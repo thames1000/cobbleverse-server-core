@@ -27,6 +27,7 @@ public final class ConfigManager {
     private static final String REWARDS_FILE = "rewards.json";
     private static final String SEASONS_FILE = "seasons.json";
     private static final String EVENTS_FILE = "events.json";
+    private static final String WEB_FILE = "web.json";
 
     private final ConfigLoader loader;
     private final List<SnapshotValidator> semanticValidators = new CopyOnWriteArrayList<>();
@@ -82,11 +83,14 @@ public final class ConfigManager {
         EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
         throwIfInvalid("CV-CONFIG-018", "events.json", ConfigValidator.validate(events));
 
+        WebConfig web = loader.loadOrCreate(WEB_FILE, WebConfig.class, WebConfig::defaults);
+        throwIfInvalid("CV-CONFIG-022", "web.json", ConfigValidator.validate(web));
+
         throwIfInvalid("CV-CONFIG-020", "cross-config references",
                 ConfigValidator.validateCrossReferences(rewards, seasons, events));
 
         backfillIds(rewards, seasons, events);
-        this.live = new ConfigSnapshot(core, database, rewards, seasons, events);
+        this.live = new ConfigSnapshot(core, database, rewards, seasons, events, web);
         LOGGER.info("Loaded configuration (serverId={}, environment={})", core.serverId, core.environment);
     }
 
@@ -118,7 +122,8 @@ public final class ConfigManager {
             // semantic validators (e.g. objective types vs the live registry) judge it before publish —
             // otherwise a reload could reintroduce the silent-degradation the startup check prevents.
             backfillIds(rewards, seasons, events);
-            ConfigSnapshot candidate = new ConfigSnapshot(core, current.database(), rewards, seasons, events);
+            ConfigSnapshot candidate = new ConfigSnapshot(core, current.database(), rewards, seasons,
+                    events, current.web());
             problems.addAll(runSemanticValidators(candidate));
             if (problems.isEmpty()) {
                 // Single atomic publication: one volatile write swaps the entire config generation.
@@ -162,6 +167,14 @@ public final class ConfigManager {
     /** The event definitions. Runtime-reloadable. */
     public EventsConfig events() {
         return live().events();
+    }
+
+    /**
+     * The web-integration config (API + webhooks). Fixed at startup and <b>not</b> runtime-reloadable —
+     * a reload carries it forward unchanged; changing the bound port or subscriptions requires a restart.
+     */
+    public WebConfig web() {
+        return live().web();
     }
 
     public ConfigLoader loader() {

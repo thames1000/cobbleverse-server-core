@@ -22,6 +22,7 @@ com.thamescape.cobbleverse.core
 ├── event/                     event lifecycle, participation, leaderboards
 ├── game/                      game-event bus + event types (ingestion layer)
 ├── statistics/                per-player statistics (a bus consumer)
+├── web/                       read-only HTTP API (api/) + outbound webhooks (webhook/)
 ├── scheduler/                 tick-based repeating / one-shot tasks
 ├── integration/               runtime mod detection (per-mod subpackages)
 ├── audit/                     server-owned action log (+ audit_log table)
