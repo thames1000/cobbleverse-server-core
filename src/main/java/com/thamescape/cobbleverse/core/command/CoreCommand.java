@@ -263,7 +263,7 @@ public final class CoreCommand {
         line(source, "loader: " + FabricLoader.getInstance().getEnvironmentType());
         var bus = CoreServices.gameEvents();
         line(source, "game events: " + bus.publishedCount() + " published, " + bus.listenerCount()
-                + " listener(s), debug=" + bus.isDebug());
+                + " consumer(s), debug=" + bus.isDebug());
         return 1;
     }
 

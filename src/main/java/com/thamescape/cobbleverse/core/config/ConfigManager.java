@@ -99,60 +99,46 @@ public final class ConfigManager {
     }
 
     /**
-     * Re-reads config from disk and swaps it in only if valid. On failure the previous config stays
-     * active and the problems are returned so the caller can report them.
+     * Re-reads the runtime-reloadable config from disk and swaps it in <b>atomically</b>: the new
+     * config is fully validated — every file individually <i>and</i> the cross-file references — before
+     * any of it goes live. If anything is invalid, nothing is swapped (the previous config stays active
+     * in its entirety) and the problems are returned. This prevents a rejected reload from leaving an
+     * individually-valid but mutually-incompatible config active.
      *
      * @return list of validation problems; empty on success
      */
     public List<String> reload() {
         List<String> problems = new java.util.ArrayList<>();
 
-        CoreConfig loaded = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
-        List<String> coreProblems = ConfigValidator.validate(loaded);
-        if (coreProblems.isEmpty()) {
-            this.coreConfig = loaded;
-            LOGGER.info("Reloaded core configuration");
-        } else {
-            LOGGER.warn("core.json reload rejected; keeping previous. {} problem(s).", coreProblems.size());
-            problems.addAll(coreProblems);
-        }
-
+        // 1. Load candidates (do not swap yet).
+        CoreConfig core = loader.loadOrCreate(CORE_FILE, CoreConfig.class, CoreConfig::defaults);
         RewardsConfig rewards = loader.loadOrCreate(REWARDS_FILE, RewardsConfig.class, RewardsConfig::defaults);
-        List<String> rewardProblems = ConfigValidator.validate(rewards);
-        if (rewardProblems.isEmpty()) {
-            rewards.definitions.forEach((id, def) -> def.id = id);
-            this.rewardsConfig = rewards;
-            LOGGER.info("Reloaded reward definitions ({})", rewards.definitions.size());
-        } else {
-            LOGGER.warn("rewards.json reload rejected; keeping previous. {} problem(s).", rewardProblems.size());
-            problems.addAll(rewardProblems);
-        }
-
         SeasonsConfig seasons = loader.loadOrCreate(SEASONS_FILE, SeasonsConfig.class, SeasonsConfig::defaults);
-        List<String> seasonProblems = ConfigValidator.validate(seasons);
-        if (seasonProblems.isEmpty()) {
-            seasons.seasons.forEach((id, def) -> def.id = id);
-            this.seasonsConfig = seasons;
-            LOGGER.info("Reloaded season definitions ({})", seasons.seasons.size());
-        } else {
-            LOGGER.warn("seasons.json reload rejected; keeping previous. {} problem(s).", seasonProblems.size());
-            problems.addAll(seasonProblems);
-        }
-
         EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
-        List<String> eventProblems = ConfigValidator.validate(events);
-        if (eventProblems.isEmpty()) {
-            events.events.forEach((id, def) -> def.id = id);
-            this.eventsConfig = events;
-            LOGGER.info("Reloaded event definitions ({})", events.events.size());
-        } else {
-            LOGGER.warn("events.json reload rejected; keeping previous. {} problem(s).", eventProblems.size());
-            problems.addAll(eventProblems);
+
+        // 2. Validate each file, then (only if all individually valid) their cross-references.
+        problems.addAll(ConfigValidator.validate(core));
+        problems.addAll(ConfigValidator.validate(rewards));
+        problems.addAll(ConfigValidator.validate(seasons));
+        problems.addAll(ConfigValidator.validate(events));
+        if (problems.isEmpty()) {
+            problems.addAll(ConfigValidator.validateCrossReferences(rewards, seasons, events));
         }
 
-        // Cross-config integrity across the now-live configs.
-        problems.addAll(ConfigValidator.validateCrossReferences(rewardsConfig, seasonsConfig, eventsConfig));
-
+        // 3. Swap everything in, or nothing.
+        if (!problems.isEmpty()) {
+            LOGGER.warn("Reload rejected; keeping previous config in full. {} problem(s).", problems.size());
+            return problems;
+        }
+        rewards.definitions.forEach((id, def) -> def.id = id);
+        seasons.seasons.forEach((id, def) -> def.id = id);
+        events.events.forEach((id, def) -> def.id = id);
+        this.coreConfig = core;
+        this.rewardsConfig = rewards;
+        this.seasonsConfig = seasons;
+        this.eventsConfig = events;
+        LOGGER.info("Reloaded configuration (rewards={}, seasons={}, events={})",
+                rewards.definitions.size(), seasons.seasons.size(), events.events.size());
         return problems;
     }
 

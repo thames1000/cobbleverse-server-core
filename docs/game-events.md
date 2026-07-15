@@ -53,13 +53,16 @@ with the debug command below.
 /cvcore debug events off
 ```
 
-With `events on`, publishing (real or synthetic) logs a line like:
+Debug logging is built into the bus itself (not a registered listener). With `events on`, publishing
+(real or synthetic) logs a line like:
 
 ```
-[GameEvent] pokemon_captured source=cobblemon player=<uuid> listeners=1 meta={species=pikachu, shiny=true}
+[GameEvent] pokemon_captured source=cobblemon player=<uuid> consumers=0 meta={species=pikachu, shiny=true}
 ```
 
-`/cvcore debug` also reports `game events: <n> published, <n> listener(s), debug=<bool>`.
+`consumers=0` is expected in 0.6.0 — no subsystem subscribes yet; the first consumers (objective
+handlers, statistics) arrive in 0.6.1, after which the count reflects them. `/cvcore debug` also
+reports `game events: <n> published, <n> consumer(s), debug=<bool>`.
 
 ## For future subscribers (developer API)
 

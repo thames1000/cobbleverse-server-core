@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -48,11 +49,17 @@ public final class GameEventBus {
         return debug;
     }
 
-    /** Publishes an event to every listener. Never throws; listener failures are logged and isolated. */
+    /**
+     * Publishes an event to every listener. Each listener's {@link Exception}s are caught and logged,
+     * so one misbehaving listener cannot disrupt the others or the producer. Note this isolates
+     * listener {@code Exception}s only: a {@code null} event throws {@link NullPointerException}, and a
+     * listener {@link Error} (e.g. {@code OutOfMemoryError}) still propagates.
+     */
     public void publish(GameEvent event) {
+        Objects.requireNonNull(event, "event");
         published.incrementAndGet();
         if (debug) {
-            LOGGER.info("[GameEvent] {} source={} player={} listeners={} meta={}",
+            LOGGER.info("[GameEvent] {} source={} player={} consumers={} meta={}",
                     event.type(), event.source(), event.playerUuid(), listeners.size(), event.metadata());
         }
         for (GameEventListener listener : listeners) {
