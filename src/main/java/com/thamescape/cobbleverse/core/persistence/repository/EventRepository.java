@@ -85,14 +85,61 @@ public final class EventRepository {
         }
     }
 
-    /** Adds to a participant's score. Returns rows updated (0 if they aren't a participant). */
-    public int addScore(Connection conn, String eventId, UUID uuid, int amount) throws SQLException {
+    /** An atomic score change: the participant's score before and after. */
+    public record ScoreChange(int oldScore, int newScore) {
+    }
+
+    /**
+     * Atomically adds to a participant's score and returns the before/after values. Empty if the
+     * player is not a participant. The read and update run on the same connection, so no other
+     * database operation can interleave.
+     */
+    public Optional<ScoreChange> addScore(Connection conn, String eventId, UUID uuid, int amount)
+            throws SQLException {
+        int oldScore;
+        try (PreparedStatement select = conn.prepareStatement(
+                "SELECT score FROM event_participation WHERE event_id = ? AND uuid = ?")) {
+            select.setString(1, eventId);
+            select.setString(2, uuid.toString());
+            try (ResultSet rs = select.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                oldScore = rs.getInt(1);
+            }
+        }
+        int newScore = Math.max(0, oldScore + amount);
+        try (PreparedStatement update = conn.prepareStatement(
+                "UPDATE event_participation SET score = ? WHERE event_id = ? AND uuid = ?")) {
+            update.setInt(1, newScore);
+            update.setString(2, eventId);
+            update.setString(3, uuid.toString());
+            update.executeUpdate();
+        }
+        return Optional.of(new ScoreChange(oldScore, newScore));
+    }
+
+    /** Marks whether a completed event has finished distributing its rewards. */
+    public void setRewardsDistributed(Connection conn, String eventId, boolean distributed)
+            throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
-                "UPDATE event_participation SET score = MAX(0, score + ?) WHERE event_id = ? AND uuid = ?")) {
-            ps.setInt(1, amount);
+                "UPDATE events SET rewards_distributed = ? WHERE event_id = ?")) {
+            ps.setInt(1, distributed ? 1 : 0);
             ps.setString(2, eventId);
-            ps.setString(3, uuid.toString());
-            return ps.executeUpdate();
+            ps.executeUpdate();
+        }
+    }
+
+    /** Event ids that are COMPLETED but whose reward distribution did not finish (needs resuming). */
+    public List<String> pendingRewardEventIds(Connection conn) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT event_id FROM events WHERE state = 'COMPLETED' AND rewards_distributed = 0");
+             ResultSet rs = ps.executeQuery()) {
+            List<String> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(rs.getString(1));
+            }
+            return out;
         }
     }
 

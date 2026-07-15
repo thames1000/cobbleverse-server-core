@@ -5,6 +5,7 @@ import com.thamescape.cobbleverse.core.audit.AuditType;
 import com.thamescape.cobbleverse.core.audit.AuditService;
 import com.thamescape.cobbleverse.core.config.ConfigManager;
 import com.thamescape.cobbleverse.core.persistence.DatabaseManager;
+import com.thamescape.cobbleverse.core.persistence.TransactionManager;
 import com.thamescape.cobbleverse.core.persistence.repository.EventRepository;
 import com.thamescape.cobbleverse.core.reward.RewardService;
 import org.slf4j.Logger;
@@ -86,7 +87,17 @@ public final class EventService {
         long now = System.currentTimeMillis();
         Long startedAt = target == EventState.ACTIVE ? now : null;
         Long endedAt = target.terminal() ? now : null;
-        db.runSync(conn -> repository.setState(conn, eventId, target.name(), startedAt, endedAt, now));
+
+        if (target == EventState.COMPLETED) {
+            // Mark completed AND reward-distribution pending in one transaction, so a crash before or
+            // during distribution is always detected and resumed on the next startup.
+            db.runSync(conn -> TransactionManager.execute(conn, c -> {
+                repository.setState(c, eventId, target.name(), startedAt, endedAt, now);
+                repository.setRewardsDistributed(c, eventId, false);
+            }));
+        } else {
+            db.runSync(conn -> repository.setState(conn, eventId, target.name(), startedAt, endedAt, now));
+        }
 
         audit.record(AuditEntry.builder(AuditType.EVENT_STATE_CHANGED)
                 .source(actor).context(eventId + ": " + current + " -> " + target));
@@ -95,7 +106,7 @@ public final class EventService {
         if (target == EventState.ACTIVE) {
             audit.record(AuditEntry.builder(AuditType.EVENT_STARTED).source(actor).context(eventId));
         } else if (target == EventState.COMPLETED) {
-            int granted = distributeRewards(def);
+            int granted = completeDistribution(def);
             audit.record(AuditEntry.builder(AuditType.EVENT_ENDED)
                     .source(actor).context(eventId + " (rewarded " + granted + " participant(s))"));
         } else if (target == EventState.CANCELLED) {
@@ -104,17 +115,37 @@ public final class EventService {
         return Result.ok(eventId + " -> " + target);
     }
 
-    private int distributeRewards(EventDefinition def) {
-        if (def.rewards.isEmpty()) {
-            return 0;
-        }
-        List<EventParticipant> participants = db.callSync(conn -> repository.participants(conn, def.id));
-        for (EventParticipant participant : participants) {
-            for (String rewardId : def.rewards) {
-                rewards.grant(participant.uuid(), rewardId, "event:" + def.id);
+    /**
+     * Re-runs reward distribution for any event that completed but did not finish rewarding (e.g. the
+     * server crashed mid-distribution). Safe because {@code grant()} is idempotent. Called on startup.
+     */
+    public int resumePendingDistributions() {
+        List<String> pending = db.callSync(repository::pendingRewardEventIds);
+        for (String eventId : pending) {
+            EventDefinition def = config.events().events.get(eventId);
+            if (def != null) {
+                LOGGER.warn("Resuming interrupted reward distribution for event '{}'", eventId);
+                completeDistribution(def);
+            } else {
+                LOGGER.warn("Completed event '{}' has no definition; marking rewards distributed", eventId);
+                db.runSync(conn -> repository.setRewardsDistributed(conn, eventId, true));
             }
         }
-        LOGGER.info("Event '{}' completed; distributed {} reward(s) to {} participant(s)",
+        return pending.size();
+    }
+
+    /** Distributes rewards to all participants, then marks the event's distribution complete. */
+    private int completeDistribution(EventDefinition def) {
+        List<EventParticipant> participants = db.callSync(conn -> repository.participants(conn, def.id));
+        if (!def.rewards.isEmpty()) {
+            for (EventParticipant participant : participants) {
+                for (String rewardId : def.rewards) {
+                    rewards.grant(participant.uuid(), rewardId, "event:" + def.id);
+                }
+            }
+        }
+        db.runSync(conn -> repository.setRewardsDistributed(conn, def.id, true));
+        LOGGER.info("Event '{}' distributed {} reward(s) to {} participant(s)",
                 def.id, def.rewards.size(), participants.size());
         return participants.size();
     }
@@ -147,8 +178,9 @@ public final class EventService {
     }
 
     public Result addScore(UUID uuid, String eventId, int amount) {
-        int rows = db.callSync(conn -> repository.addScore(conn, eventId, uuid, amount));
-        return rows > 0 ? Result.ok("score updated") : Result.fail("player is not a participant");
+        return db.callSync(conn -> repository.addScore(conn, eventId, uuid, amount))
+                .map(change -> Result.ok("score " + change.oldScore() + " -> " + change.newScore()))
+                .orElse(Result.fail("player is not a participant"));
     }
 
     public int participantCount(String eventId) {

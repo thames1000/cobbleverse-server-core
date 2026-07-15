@@ -3,6 +3,24 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - Unreleased
+
+Event hardening (from code review) — transactionality fixes.
+
+### Fixed
+- **Resumable event reward distribution**: completing an event now marks its state `COMPLETED` and its
+  reward distribution *pending* in one transaction, distributes, then marks it *done*. If the server
+  crashes partway through rewarding participants, a startup sweep re-runs distribution for any event
+  that is `COMPLETED` but not finished. Safe because `grant()` is idempotent, so already-rewarded
+  participants are skipped. Previously a mid-distribution crash could leave some participants
+  permanently un-rewarded. (migration `V006`; pre-0.5.1 completed events are treated as already
+  distributed.)
+- **Atomic score updates**: `EventRepository.addScore` now reads and updates a participant's score in
+  a single operation and returns the before/after values, instead of a bare row-count.
+
+### Changed
+- `EventService.addScore` reports the score change (`score N -> M`).
+
 ## [0.5.0] - Unreleased
 
 Events and leaderboards (first pass) — admin-driven event lifecycle to prove the state machine,
