@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.thamescape.cobbleverse.core.CoreConstants;
@@ -95,7 +96,11 @@ public final class CoreCommand {
                 .then(literal("create")
                         .then(argument("name", StringArgumentType.word())
                                 .executes(ctx -> playerCreate(ctx.getSource(),
-                                        StringArgumentType.getString(ctx, "name"))))));
+                                        StringArgumentType.getString(ctx, "name")))))
+                .then(literal("stats")
+                        .then(argument("player", StringArgumentType.word())
+                                .executes(ctx -> playerStats(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "player"))))));
 
         root.then(literal("reward")
                 .requires(perms.require(CorePermissions.ADMIN_REWARDS, CoreConstants.ADMIN_FALLBACK_LEVEL))
@@ -150,7 +155,16 @@ public final class CoreCommand {
                         .executes(ctx -> seasonTop(ctx.getSource(), 10))
                         .then(argument("count", IntegerArgumentType.integer(1, 100))
                                 .executes(ctx -> seasonTop(ctx.getSource(),
-                                        IntegerArgumentType.getInteger(ctx, "count"))))));
+                                        IntegerArgumentType.getInteger(ctx, "count")))))
+                .then(literal("rewards")
+                        .then(literal("pending")
+                                .executes(ctx -> seasonRewardsPending(ctx.getSource())))
+                        .then(literal("retry")
+                                .executes(ctx -> seasonRewardsRetry(ctx.getSource())))
+                        .then(literal("abandon")
+                                .then(argument("id", LongArgumentType.longArg(1))
+                                        .executes(ctx -> seasonRewardsAbandon(ctx.getSource(),
+                                                LongArgumentType.getLong(ctx, "id")))))));
 
         root.then(literal("event")
                 .requires(perms.require(CorePermissions.ADMIN_EVENTS, CoreConstants.ADMIN_FALLBACK_LEVEL))
@@ -370,6 +384,11 @@ public final class CoreCommand {
         }
     }
 
+    private static int playerStats(ServerCommandSource source, String playerName) {
+        withResolvedUuid(source, playerName, uuid -> StatsCommand.show(source, uuid, playerName));
+        return 1;
+    }
+
     private static int rewardList(ServerCommandSource source) {
         source.sendFeedback(() -> CoreServices.messages().prefix()
                 .append(Text.literal("Reward definitions")), false);
@@ -490,6 +509,42 @@ public final class CoreCommand {
         for (var e : top) {
             line(source, (rank++) + ". " + e.label() + " — " + e.points());
         }
+        return 1;
+    }
+
+    private static int seasonRewardsPending(ServerCommandSource source) {
+        var pending = CoreServices.seasons().listPendingMilestones();
+        source.sendFeedback(() -> CoreServices.messages().prefix()
+                .append(Text.literal("Pending milestone rewards")), false);
+        if (pending.isEmpty()) {
+            line(source, "(none — the outbox is empty)");
+            return 1;
+        }
+        for (var p : pending) {
+            line(source, "#" + p.id() + " — " + p.rewardId() + " for " + p.uuid()
+                    + " (season " + p.seasonId() + ")");
+        }
+        line(source, pending.size() + " owed; 'retry' to re-deliver, 'abandon <id>' to drop one.");
+        return 1;
+    }
+
+    private static int seasonRewardsRetry(ServerCommandSource source) {
+        int delivered = CoreServices.seasons().resumePendingMilestones();
+        int remaining = CoreServices.seasons().listPendingMilestones().size();
+        source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                "Retried pending milestone rewards: " + delivered + " attempted, "
+                        + remaining + " still pending.")), true);
+        return 1;
+    }
+
+    private static int seasonRewardsAbandon(ServerCommandSource source, long id) {
+        boolean removed = CoreServices.seasons().abandonPendingMilestone(id, "admin:" + source.getName());
+        if (!removed) {
+            source.sendError(Text.literal("No pending milestone reward #" + id + "."));
+            return 0;
+        }
+        source.sendFeedback(() -> CoreServices.messages().prefix().append(Text.literal(
+                "Abandoned pending milestone reward #" + id + " (not delivered).")), true);
         return 1;
     }
 

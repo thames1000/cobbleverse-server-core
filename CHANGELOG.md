@@ -3,6 +3,76 @@
 All notable changes to Cobbleverse Server Core are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - Unreleased
+
+The first real consumers of the game-event bus (0.6.0): event-driven season objectives and player
+statistics. Both are exercisable end-to-end with `/cvcore debug publish` — no Cobblemon needed.
+
+### Added
+- **Event-driven objectives**: objective handlers that advance season objectives from game events —
+  `capture_species` (field `species`), `capture_shiny`, `capture_any`, and `battle_won` (optional
+  field `battleKind`; wild captures excluded so they don't double-count). Registered in the
+  `ObjectiveRegistry`; `manual` still works for admin/other-module progress. A single
+  `SeasonObjectiveEventListener` bridges the bus to `SeasonService` — the only class coupling game
+  events to seasons.
+- **Player statistics** (`statistics/`): a key/value stats store (migration `V007`) updated from game
+  events by `StatisticsGameEventListener` — `captures`, `shinies`, `battles_won`, `sessions`.
+  `StatisticsService` (async increments, sync reads).
+- **Commands**: `/stats` (your own) and `/cvcore player stats <player>`.
+- **Permission**: `cobbleverse.command.stats`.
+- `CoreServices.statistics()` accessor.
+
+### Fixed (from PR review)
+- **Objective processing no longer blocks the server thread**: `SeasonObjectiveEventListener` matches
+  handlers cheaply on the publishing thread, then hands all matching objectives to a single async job
+  (`SeasonService.advanceObjectivesAsync`). Database work runs on the DB worker; milestone reward
+  grants (which may deliver items / run commands) are marshalled back onto the server thread. Honors
+  the bus contract that listeners route database work off-thread. (+ non-blocking test)
+- **Strict objective validation**: `capture_species` without a `species`, and `battle_won` with a
+  `battleKind` outside `pvp`/`pvn`/`pvw`, fail config load with a clear error instead of silently
+  never matching.
+- **Statistics failures keep stack traces** (log the throwable, matching the event bus).
+- seasons.md corrected (no longer "manual only"; the capture-species example is named accurately).
+
+### Fixed (from PR review, round 2)
+- **Durable milestone reward delivery** (migration `V008`, `pending_milestone_rewards`): completing an
+  objective (or an admin points change) now records each crossed milestone's owed reward in the **same
+  transaction** as the points, then delivers it from that outbox and deletes the row. A crash between
+  committing points and granting the reward can no longer lose it — `SeasonService.resumePendingMilestones()`
+  (run at startup) re-delivers anything left pending, exactly once. Async completions marshal delivery
+  back onto the server thread; if none is available the reward stays pending for the next startup.
+- **Objective-type validation no longer closes the extension point**: type existence is confirmed
+  against the live `ObjectiveRegistry` at startup, not the closed `ObjectiveType` enum. Custom types
+  are honoured; typos and unhandled types still fail fast (`[CV-CONFIG-017]`). The enum now only drives
+  built-in matcher-field checks.
+- **Async objective-progress failures keep stack traces** (log the throwable, not just its message).
+- **Non-blocking test hardened** against a race: it now waits until the DB worker has actually picked
+  up the blocking task before timing `onGameEvent`, so it measures against a genuinely busy worker.
+
+### Fixed (from PR review, round 3)
+- **`/cvcore reload` now runs registry-aware objective-type validation**: `ConfigManager` gained a
+  semantic-validation hook (`addSemanticValidator`) that runs against every candidate generation before
+  publication, on both startup and reload. The objective-type check is registered there, so a reload
+  that introduces an objective type with no registered handler is rejected (previous config kept in
+  full) instead of silently accepting an objective that never progresses.
+- **Async completion audits are emitted only after the transaction commits**: `advanceObjectivesAsync`
+  now collects completion facts inside the transaction and records the "objective completed" /
+  "points changed" audit entries (and logs) after `TransactionManager.execute` returns. A rolled-back
+  transaction can no longer leave audit entries claiming changes that never committed.
+- **Milestone-reward outbox is now operable**: `/cvcore season rewards pending` lists owed grants,
+  `… retry` re-attempts delivery, and `… abandon <id>` drops a permanently-undeliverable entry so it
+  stops retrying every startup. (`SeasonService.listPendingMilestones` / `abandonPendingMilestone`.)
+
+### Notes
+- Objective types are data-driven (config `type` + fields), matched by registered handlers; the
+  `ObjectiveRegistry` is the authority for which types exist, and the `ObjectiveType` enum only drives
+  built-in matcher-field validation.
+- **Custom objective handlers**: the registry and its now reload-aware validation are the mechanism for
+  third-party objective types, but a public registration surface for external mods (a service-loader /
+  entrypoint that runs *before* startup validation) is deferred to the 1.0 developer API. Today the
+  registry is populated only by the core's built-in handlers.
+- Season objective auto-progress only counts while the season is ACTIVE (existing gate).
+
 ## [0.6.0] - Unreleased
 
 Game-event ingestion layer — the backbone for turning game-world actions into reactions across

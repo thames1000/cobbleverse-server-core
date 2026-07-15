@@ -18,6 +18,7 @@ public final class CorePermissions {
     public static final String COMMAND_REWARDS = "cobbleverse.command.rewards";
     public static final String COMMAND_SEASON = "cobbleverse.command.season";
     public static final String COMMAND_EVENTS = "cobbleverse.command.events";
+    public static final String COMMAND_STATS = "cobbleverse.command.stats";
 
     // Player-facing
     public static final String PROFILE_VIEW = "cobbleverse.profile.view";

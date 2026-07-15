@@ -15,6 +15,7 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore debug publish capture <player> <species> [shiny]` | `cobbleverse.admin.debug` | op 4 | Inject a synthetic capture event |
 | `/cvcore database status` | `cobbleverse.admin.database` | op 4  | Connection state, schema version, profile/audit counts |
 | `/cvcore player create <name>` | `cobbleverse.admin.player` | op 4 | Pre-create a profile for a player who hasn't joined |
+| `/cvcore player stats <player>` | `cobbleverse.admin.player` | op 4 | View a player's statistics           |
 | `/cvcore reward list`  | `cobbleverse.admin.rewards`  | op 4  | List configured reward definitions        |
 | `/cvcore reward grant <player> <id>` | `cobbleverse.admin.rewards` | op 4 | Grant a reward (queues if offline)  |
 | `/cvcore reward retry <player> [id]` | `cobbleverse.admin.rewards` | op 4 | Revive dead-lettered rewards, re-deliver |
@@ -24,6 +25,9 @@ fallback) and, with no argument, runs `info`.
 | `/cvcore season addpoints <player> <amount>` | `cobbleverse.admin.season` | op 4 | Adjust points (may be negative) |
 | `/cvcore season objective <player> <objective> <amount>` | `cobbleverse.admin.season` | op 4 | Add objective progress |
 | `/cvcore season top [n]` | `cobbleverse.admin.season`  | op 4       | Season points leaderboard           |
+| `/cvcore season rewards pending` | `cobbleverse.admin.season` | op 4 | List milestone rewards still owed (durable outbox) |
+| `/cvcore season rewards retry` | `cobbleverse.admin.season` | op 4 | Re-attempt delivery of all pending milestone rewards |
+| `/cvcore season rewards abandon <id>` | `cobbleverse.admin.season` | op 4 | Drop a permanently-undeliverable milestone reward |
 | `/cvcore event list`   | `cobbleverse.admin.events`   | op 4       | List events + state                 |
 | `/cvcore event open\|start\|complete\|cancel\|schedule <id>` | `cobbleverse.admin.events` | op 4 | Drive event lifecycle |
 | `/cvcore event addplayer <id> <player>` | `cobbleverse.admin.events` | op 4 | Add a participant from console |
@@ -47,6 +51,7 @@ fallback) and, with no argument, runs `info`.
 | `/event join <id>`  | `cobbleverse.event.join`         | all      | Join an open/active event                |
 | `/event leave <id>` | `cobbleverse.event.leave`        | all      | Leave an event                           |
 | `/event leaderboard <id>` | `cobbleverse.command.events` | all     | Event score leaderboard                  |
+| `/stats`            | `cobbleverse.command.stats`      | all      | Your own statistics                      |
 
 ## Reload scope
 

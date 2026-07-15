@@ -14,6 +14,7 @@ import com.thamescape.cobbleverse.core.reward.RewardService;
 import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 import com.thamescape.cobbleverse.core.season.SeasonService;
+import com.thamescape.cobbleverse.core.statistics.StatisticsService;
 
 /**
  * Static entry point to the {@link ServiceRegistry}. Convenient for commands and, later, feature
@@ -99,5 +100,9 @@ public final class CoreServices {
 
     public static GameEventBus gameEvents() {
         return registry().gameEvents();
+    }
+
+    public static StatisticsService statistics() {
+        return registry().statistics();
     }
 }

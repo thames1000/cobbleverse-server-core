@@ -462,6 +462,11 @@ bus, the event contract, and **player join/leave events** are live; the first re
   compile-verified; confirm it fires live with `/cvcore debug events on` and a real capture.)
 - **Test the pipeline without Cobblemon**: `/cvcore debug events on`, then
   `/cvcore debug publish capture <player> <species> [shiny]` — you'll see the event logged.
+- **Consumers (0.6.1)**: game events now drive **season objectives** (`capture_species`,
+  `capture_shiny`, `capture_any`, `battle_won` — see [seasons.md](seasons.md)) and **player
+  statistics** (`captures`, `shinies`, `battles_won`, `sessions` — view with `/stats` or
+  `/cvcore player stats <player>`). Injecting a synthetic capture advances a matching active-season
+  objective and bumps the stat, so you can verify the whole chain before Cobblemon is confirmed live.
 
 See [game-events.md](game-events.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).
@@ -600,6 +605,7 @@ update whichever of these applies:
 | A season, objective, or milestone      | [§9](#9-day-to-day-operation), `docs/seasons.md`    |
 | An event, its lifecycle, or scoring    | [§9](#9-day-to-day-operation), `docs/events.md`     |
 | A game event type or the bus           | [§9](#9-day-to-day-operation), `docs/game-events.md`|
+| An objective type or a tracked statistic | [§9](#9-day-to-day-operation), `docs/seasons.md` + `docs/game-events.md` |
 | An integration (added/removed/mod id) | [§8](#8-integrations), `docs/integrations.md`       |
 | Startup behaviour or the report       | [§4](#4-first-run--what-you-should-see), `docs/architecture.md` |
 | Anything user-visible                 | `CHANGELOG.md`                                      |

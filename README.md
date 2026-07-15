@@ -12,12 +12,13 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.6.0 (Game Event Bus)
+## Status — 0.6.1 (Game Event Bus + Consumers)
 
-Starts the game-event ingestion layer: a central bus that game-world actions publish to and
-subsystems subscribe to. 0.6.0 ships the bus, event contract, live player events, a **real Cobblemon
-adapter** (capture + battle-win events, compiled against Cobblemon 1.7.3 as an optional dependency),
-and debug/synthetic-publish tooling; consumers (objective handlers, statistics) land in 0.6.1.
+The game-event ingestion layer plus its first real consumers. 0.6.0 shipped the bus, event contract,
+live player events, and a **real Cobblemon adapter** (capture + battle-win, compiled against Cobblemon
+1.7.3 as an optional dependency). 0.6.1 adds **event-driven season objectives** (`capture_species`,
+`capture_shiny`, `battle_won`, …) and **player statistics** — both driven by the bus and testable via
+`/cvcore debug publish`.
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -35,7 +36,8 @@ and debug/synthetic-publish tooling; consumers (objective handlers, statistics) 
 | Seasons           | Objectives, points, milestones (→ rewards), lifecycle detection |
 | Events            | Lifecycle state machine, participation, completion rewards       |
 | Leaderboards      | Season points + event score (`/…leaderboard`, `/cvcore season top`) |
-| **Game event bus**| **Publish/subscribe ingestion layer; player events + Cobblemon capture/battle (optional dep)** |
+| Game event bus    | Publish/subscribe ingestion layer; player events + Cobblemon capture/battle (optional dep) |
+| **Bus consumers** | **Event-driven season objectives + player statistics**          |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
@@ -99,8 +101,8 @@ error rather than being silently replaced.
 | 0.3.0   | Rewards + currency |
 | 0.4.0   | Seasons + objectives |
 | 0.5.0   | Events + leaderboards |
-| 0.6.0   | Game event bus *(this release)* |
-| 0.6.1   | Objective handlers + statistics (bus consumers) |
+| 0.6.0   | Game event bus |
+| 0.6.1   | Objective handlers + statistics (bus consumers) *(this release)* |
 | 0.7.0   | Web integration |
 | 1.0.0   | Stable public API |
 

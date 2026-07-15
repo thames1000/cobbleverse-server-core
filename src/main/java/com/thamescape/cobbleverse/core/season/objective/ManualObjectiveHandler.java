@@ -7,4 +7,9 @@ public final class ManualObjectiveHandler implements ObjectiveHandler {
     public String type() {
         return ObjectiveType.MANUAL.id();
     }
+
+    @Override
+    public boolean manual() {
+        return true;
+    }
 }

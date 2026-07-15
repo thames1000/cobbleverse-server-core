@@ -14,6 +14,7 @@ import com.thamescape.cobbleverse.core.reward.RewardService;
 import com.thamescape.cobbleverse.core.reward.currency.CurrencyService;
 import com.thamescape.cobbleverse.core.scheduler.CoreScheduler;
 import com.thamescape.cobbleverse.core.season.SeasonService;
+import com.thamescape.cobbleverse.core.statistics.StatisticsService;
 
 /**
  * Holds the single instance of each core service so features resolve dependencies through one place
@@ -38,6 +39,7 @@ public final class ServiceRegistry {
     private final SeasonService seasonService;
     private final EventService eventService;
     private final GameEventBus gameEventBus;
+    private final StatisticsService statisticsService;
 
     public ServiceRegistry(ConfigManager configManager,
                            PermissionService permissionService,
@@ -52,7 +54,8 @@ public final class ServiceRegistry {
                            CurrencyService currencyService,
                            SeasonService seasonService,
                            EventService eventService,
-                           GameEventBus gameEventBus) {
+                           GameEventBus gameEventBus,
+                           StatisticsService statisticsService) {
         this.configManager = configManager;
         this.permissionService = permissionService;
         this.messageService = messageService;
@@ -67,6 +70,7 @@ public final class ServiceRegistry {
         this.seasonService = seasonService;
         this.eventService = eventService;
         this.gameEventBus = gameEventBus;
+        this.statisticsService = statisticsService;
     }
 
     public ConfigManager config() {
@@ -123,5 +127,9 @@ public final class ServiceRegistry {
 
     public GameEventBus gameEvents() {
         return gameEventBus;
+    }
+
+    public StatisticsService statistics() {
+        return statisticsService;
     }
 }

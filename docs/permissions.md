@@ -34,6 +34,7 @@ perms.check(source, CorePermissions.ADMIN_RELOAD, CoreConstants.ADMIN_FALLBACK_L
 | `cobbleverse.command.events`     | all      | `/events`, `/event info \| leaderboard`  |
 | `cobbleverse.event.join`         | all      | `/event join <id>`                       |
 | `cobbleverse.event.leave`        | all      | `/event leave <id>`                      |
+| `cobbleverse.command.stats`      | all      | `/stats`                                 |
 
 ## Reserved namespace
 
