@@ -54,6 +54,15 @@ class ConfigValidatorWebTest {
     }
 
     @Test
+    void excessiveMaxConcurrentIsRejected() {
+        WebConfig config = new WebConfig();
+        config.api.enabled = true;
+        config.api.apiKey = "secret";
+        config.api.maxConcurrentRequests = 100_000; // unreasonable; would size an absurd executor
+        assertFalse(ConfigValidator.validate(config).isEmpty(), "maxConcurrentRequests has an upper bound");
+    }
+
+    @Test
     void negativeRateLimitIsRejected() {
         WebConfig config = new WebConfig();
         config.api.enabled = true;

@@ -21,7 +21,8 @@ JDK HTTP client.
     "apiKey": "",
     "leaderboardMaxLimit": 100,
     "maxConcurrentRequests": 6,
-    "rateLimitPerMinute": 120
+    "rateLimitPerMinute": 120,
+    "trustForwardedFor": false
   },
   "webhooks": {
     "enabled": false,
@@ -79,12 +80,18 @@ Errors are JSON (`{"error": "..."}`) with a matching status: `400` (bad param/uu
 `429` (rate limited), `503` (at the concurrency cap), `500` (isolated internal error).
 
 **Protecting the shared database worker.** API reads go through the same single DB worker gameplay
-uses, so the API is throttled two ways: `maxConcurrentRequests` caps how many requests do DB work at
-once (excess → `503` immediately, never queued onto the worker), and `rateLimitPerMinute` caps
-requests per client IP per minute (`0` disables it; over → `429`). Requests run on a bounded daemon
-thread pool with a bounded queue. Behind a reverse proxy the client IP is the proxy's, so also rate-
-limit at the proxy. (A dedicated read-only DB connection for the API is a candidate future
-enhancement; today reads share the worker but are bounded.)
+uses, so the API is throttled two ways: `maxConcurrentRequests` (1–64) caps how many requests do DB
+work at once (excess → `503` immediately, never queued onto the worker), and `rateLimitPerMinute` caps
+requests per client per minute (`0` disables it; over → `429`). Requests run on a bounded daemon thread
+pool with a bounded queue. Public `/health` is exempt from rate limiting, so an uptime monitor is never
+throttled. (A dedicated read-only DB connection for the API is a candidate future enhancement; today
+reads share the worker but are bounded.)
+
+**Rate-limit identity behind a proxy.** By default the limiter keys on the socket's remote IP — behind
+a loopback reverse proxy that is the proxy's address, so *every* dashboard user shares one budget. Set
+`trustForwardedFor: true` to key on the first `X-Forwarded-For` hop instead. Enable this **only** when a
+trusted proxy sets/overwrites that header, since a directly-reachable server would let clients spoof it
+to evade the limit. Either way, prefer doing per-client rate limiting at the proxy too.
 
 **Security posture.** Default is loopback + mandatory key + read-only (no write surface). Exposing it
 off-box is a deliberate `bindAddress` change and should sit behind a reverse proxy terminating TLS and

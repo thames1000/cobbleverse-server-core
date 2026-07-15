@@ -89,8 +89,8 @@ public final class ConfigValidator {
             if (api.leaderboardMaxLimit <= 0) {
                 problems.add("web.json: api.leaderboardMaxLimit must be positive");
             }
-            if (api.maxConcurrentRequests <= 0) {
-                problems.add("web.json: api.maxConcurrentRequests must be positive");
+            if (api.maxConcurrentRequests < 1 || api.maxConcurrentRequests > 64) {
+                problems.add("web.json: api.maxConcurrentRequests must be between 1 and 64");
             }
             if (api.rateLimitPerMinute < 0) {
                 problems.add("web.json: api.rateLimitPerMinute must not be negative (0 disables it)");

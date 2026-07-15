@@ -28,10 +28,21 @@ API beyond loopback.
 - **`/api/v1/stats/<uuid>` is consistent with `/player`** (Low): an unknown player now returns `404`
   rather than a successful all-zero record.
 
+### Refinements (from review follow-up)
+- **Rate-limit identity behind a proxy**: new `trustForwardedFor` (default false) keys the limiter on
+  the first `X-Forwarded-For` hop when set — enable only behind a trusted proxy (otherwise spoofable).
+  Without it, a loopback proxy collapses all users into one budget; documented either way.
+- **`maxConcurrentRequests` is bounded to 1–64** (was only `> 0`), so an accidental huge value can't
+  size an absurd executor.
+- **Public `/health` is exempt from rate limiting**, so an uptime monitor is never throttled.
+
 ### Notes
-- New `web.json` `api` fields: `maxConcurrentRequests` (default 6), `rateLimitPerMinute` (default 120).
-- Behind a reverse proxy the client IP is the proxy's, so also rate-limit at the proxy. A dedicated
-  read-only DB connection for API reads is noted as a candidate future enhancement.
+- New `web.json` `api` fields: `maxConcurrentRequests` (default 6, 1–64), `rateLimitPerMinute`
+  (default 120), `trustForwardedFor` (default false).
+- Executor-queue saturation (the 64-entry bounded queue) drops at the socket rather than returning a
+  JSON `503` — an intentional last-resort memory backstop, distinct from the graceful `503` a handler
+  returns when it can't get a concurrency permit. A dedicated read-only DB connection for API reads
+  remains a candidate future enhancement.
 
 ## [0.7.0] - Unreleased
 

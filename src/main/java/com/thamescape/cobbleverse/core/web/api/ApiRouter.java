@@ -31,14 +31,16 @@ public final class ApiRouter implements HttpHandler {
     private final byte[] apiKey;
     private final int leaderboardMaxLimit;
     private final RateLimiter rateLimiter;
+    private final boolean trustForwardedFor;
     private final Semaphore concurrency;
 
     public ApiRouter(ApiData data, String apiKey, int leaderboardMaxLimit,
-                     int maxConcurrentRequests, int rateLimitPerMinute) {
+                     int maxConcurrentRequests, int rateLimitPerMinute, boolean trustForwardedFor) {
         this.data = data;
         this.apiKey = apiKey.getBytes(StandardCharsets.UTF_8);
         this.leaderboardMaxLimit = leaderboardMaxLimit;
         this.rateLimiter = new RateLimiter(rateLimitPerMinute);
+        this.trustForwardedFor = trustForwardedFor;
         this.concurrency = new Semaphore(Math.max(1, maxConcurrentRequests));
     }
 
@@ -49,17 +51,18 @@ public final class ApiRouter implements HttpHandler {
                 error(exchange, 405, "method not allowed (read-only API)");
                 return;
             }
-            if (!rateLimiter.tryAcquire(clientId(exchange), System.currentTimeMillis())) {
-                error(exchange, 429, "rate limit exceeded");
-                return;
-            }
             String path = exchange.getRequestURI().getPath();
-            // Public liveness probe: no auth, no database, no concurrency permit — just "the process is
-            // up and answering". Detailed, DB-touching diagnostics live behind auth at /api/v1/health.
+            // Public liveness probe: no auth, no rate limit, no database, no concurrency permit — just
+            // "the process is up and answering", so an uptime monitor is never throttled. Detailed,
+            // DB-touching diagnostics live behind auth at /api/v1/health.
             if ("/health".equals(path)) {
                 JsonObject live = new JsonObject();
                 live.addProperty("status", "OK");
                 send(exchange, 200, live);
+                return;
+            }
+            if (!rateLimiter.tryAcquire(clientId(exchange), System.currentTimeMillis())) {
+                error(exchange, 429, "rate limit exceeded");
                 return;
             }
             if (!authorized(exchange)) {
@@ -87,7 +90,14 @@ public final class ApiRouter implements HttpHandler {
         }
     }
 
-    private static String clientId(HttpExchange exchange) {
+    private String clientId(HttpExchange exchange) {
+        if (trustForwardedFor) {
+            String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                int comma = forwarded.indexOf(',');
+                return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
+            }
+        }
         var remote = exchange.getRemoteAddress();
         return remote == null || remote.getAddress() == null
                 ? "unknown" : remote.getAddress().getHostAddress();

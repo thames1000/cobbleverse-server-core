@@ -44,8 +44,15 @@ public class WebConfig {
          * gameplay-critical operations you can tolerate delaying.
          */
         public int maxConcurrentRequests = 6;
-        /** Per-client-IP request cap per minute (fixed window). {@code 0} disables rate limiting. */
+        /** Per-client request cap per minute (fixed window). {@code 0} disables rate limiting. */
         public int rateLimitPerMinute = 120;
+        /**
+         * Whether to derive the rate-limit client identity from the {@code X-Forwarded-For} header
+         * instead of the socket address. Enable this <b>only</b> behind a trusted reverse proxy that
+         * sets/overwrites that header — otherwise clients can spoof it to evade the limit. Off by
+         * default (the socket IP is used).
+         */
+        public boolean trustForwardedFor = false;
     }
 
     /** Outbound webhook settings. */

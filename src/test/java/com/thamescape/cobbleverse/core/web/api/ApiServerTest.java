@@ -102,7 +102,11 @@ class ApiServerTest {
     private String base;
 
     private static ApiServer serve(ApiData data, int maxConcurrent, int rateLimit) {
-        ApiRouter router = new ApiRouter(data, KEY, 100, maxConcurrent, rateLimit);
+        return serve(data, maxConcurrent, rateLimit, false);
+    }
+
+    private static ApiServer serve(ApiData data, int maxConcurrent, int rateLimit, boolean trustForwardedFor) {
+        ApiRouter router = new ApiRouter(data, KEY, 100, maxConcurrent, rateLimit, trustForwardedFor);
         ApiServer server = new ApiServer("127.0.0.1", 0, maxConcurrent + 4, router); // 0 = ephemeral port
         server.start();
         return server;
@@ -240,6 +244,40 @@ class ApiServerTest {
         } finally {
             limited.stop();
         }
+    }
+
+    @Test
+    void livenessIsNotRateLimited() throws Exception {
+        ApiServer limited = serve(new FakeData(), 6, 1); // 1 request/minute per client
+        try {
+            String origin = "http://127.0.0.1:" + limited.boundPort();
+            for (int i = 0; i < 3; i++) {
+                assertEquals(200, get(origin, "/health", null).statusCode(),
+                        "liveness must never be rate limited (uptime monitors)");
+            }
+        } finally {
+            limited.stop();
+        }
+    }
+
+    @Test
+    void forwardedForIdentifiesClientsWhenTrusted() throws Exception {
+        ApiServer proxied = serve(new FakeData(), 6, 1, true); // 1/min, keyed by X-Forwarded-For
+        try {
+            String origin = "http://127.0.0.1:" + proxied.boundPort();
+            assertEquals(200, getForwarded(origin, "1.1.1.1").statusCode(), "client A's first request");
+            assertEquals(200, getForwarded(origin, "2.2.2.2").statusCode(), "client B is independent");
+            assertEquals(429, getForwarded(origin, "1.1.1.1").statusCode(), "client A is now over its limit");
+        } finally {
+            proxied.stop();
+        }
+    }
+
+    private HttpResponse<String> getForwarded(String origin, String forwardedFor)
+            throws IOException, InterruptedException {
+        return client.send(HttpRequest.newBuilder(URI.create(origin + "/api/v1/season"))
+                .header("X-API-Key", KEY).header("X-Forwarded-For", forwardedFor).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
