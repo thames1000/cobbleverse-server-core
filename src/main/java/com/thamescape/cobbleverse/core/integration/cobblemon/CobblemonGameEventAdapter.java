@@ -1,9 +1,13 @@
 package com.thamescape.cobbleverse.core.integration.cobblemon;
 
+import com.cobblemon.mod.common.api.battles.model.actor.BattleActor;
+import com.cobblemon.mod.common.api.events.CobblemonEvents;
+import com.cobblemon.mod.common.api.events.battles.BattleVictoryEvent;
+import com.cobblemon.mod.common.api.events.pokemon.PokemonCapturedEvent;
 import com.thamescape.cobbleverse.core.game.GameEventBus;
 import com.thamescape.cobbleverse.core.game.battle.BattleWonGameEvent;
 import com.thamescape.cobbleverse.core.game.capture.PokemonCapturedGameEvent;
-import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.network.ServerPlayerEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,20 +15,17 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Translates Cobblemon's game events into core {@link com.thamescape.cobbleverse.core.game.GameEvent}s
- * on the {@link GameEventBus}. This is the <b>only</b> class that knows about Cobblemon — nothing else
- * in the core imports it, so a missing or different Cobblemon degrades gracefully.
+ * Translates Cobblemon's events into core {@link com.thamescape.cobbleverse.core.game.GameEvent}s on
+ * the {@link GameEventBus}. This is the <b>only</b> class that imports Cobblemon; it is compiled
+ * against Cobblemon ({@code modCompileOnly}) but Cobblemon is never bundled and not required at
+ * runtime. It is instantiated only when Cobblemon is actually installed (the bootstrap gates on the
+ * Fabric mod list), so the core runs standalone without it.
  *
- * <p><b>Wiring status (0.6.0):</b> detection and the publish seam ({@link #publishCapture},
- * {@link #publishBattleWon}) are in place. The concrete subscription to Cobblemon's capture/battle
- * events must be compiled against Cobblemon's (Kotlin) event API for a specific Cobblemon version, so
- * it is added as a follow-up once that version is fixed. Until then, use {@code /cvcore debug publish}
- * to exercise the whole pipeline (bus → listeners) without Cobblemon.
+ * <p>Subscriptions live for the server's lifetime (Fabric has no hot-unload), so there is no teardown.
  */
 public final class CobblemonGameEventAdapter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("CobbleverseCore/GAME");
-    private static final String COBBLEMON_MOD_ID = "cobblemon";
 
     private final GameEventBus bus;
 
@@ -32,24 +33,32 @@ public final class CobblemonGameEventAdapter {
         this.bus = bus;
     }
 
+    /** Subscribes to Cobblemon's capture and battle-victory events. Called only when Cobblemon is present. */
     public void register() {
-        if (!FabricLoader.getInstance().isModLoaded(COBBLEMON_MOD_ID)) {
-            LOGGER.info("Cobblemon not present; game-event bridge idle");
+        CobblemonEvents.POKEMON_CAPTURED.subscribe(this::onCapture);
+        CobblemonEvents.BATTLE_VICTORY.subscribe(this::onBattleVictory);
+        LOGGER.info("Cobblemon game-event bridge active (capture, battle victory)");
+    }
+
+    private void onCapture(PokemonCapturedEvent event) {
+        ServerPlayerEntity player = event.getPlayer();
+        if (player == null) {
             return;
         }
-        // Cobblemon's event API (CobblemonEvents.POKEMON_CAPTURED, ...) is subscribed here in the
-        // Cobblemon-compiled adapter build, calling publishCapture/publishBattleWon below.
-        LOGGER.info("Cobblemon detected; game-event bridge ready (capture/battle subscription pending "
-                + "the Cobblemon-compiled adapter — see docs/game-events.md)");
+        bus.publish(new PokemonCapturedGameEvent(player.getUuid(), Instant.now(),
+                event.getPokemon().getSpecies().getName(), event.getPokemon().getShiny()));
     }
 
-    /** Publishes a capture to the bus. Called by the Cobblemon event hook (or the debug command). */
-    public void publishCapture(UUID player, String species, boolean shiny) {
-        bus.publish(new PokemonCapturedGameEvent(player, Instant.now(), species, shiny));
-    }
-
-    /** Publishes a battle win to the bus. Called by the Cobblemon event hook. */
-    public void publishBattleWon(UUID player) {
-        bus.publish(new BattleWonGameEvent(player, Instant.now()));
+    private void onBattleVictory(BattleVictoryEvent event) {
+        String kind = event.getBattle().isPvP() ? "pvp"
+                : event.getBattle().isPvN() ? "pvn"
+                : event.getBattle().isPvW() ? "pvw" : "other";
+        String format = event.getBattle().getFormat().getBattleType().getName();
+        boolean wildCapture = event.getWasWildCapture();
+        for (BattleActor winner : event.getWinners()) {
+            for (UUID uuid : winner.getPlayerUUIDs()) {
+                bus.publish(new BattleWonGameEvent(uuid, Instant.now(), kind, format, wildCapture));
+            }
+        }
     }
 }

@@ -17,19 +17,29 @@ consumers (objective handlers, statistics) arrive in 0.6.1.
   `BattleWonGameEvent`.
 - **Player events are live**: the player lifecycle listener publishes `player_joined` / `player_left`
   to the bus.
-- **Cobblemon adapter scaffold** (`integration/cobblemon/CobblemonGameEventAdapter`): the single class
-  that knows Cobblemon. Detects it and exposes the publish seam; the concrete capture/battle
-  subscription is wired in a follow-up compiled against a specific Cobblemon version.
-- **Debug tooling**: `/cvcore debug events on|off` (log every game event + attached listeners) and
-  `/cvcore debug publish capture <player> <species> [shiny]` (inject a synthetic event to exercise the
-  whole pipeline without Cobblemon). `/cvcore debug` now reports bus stats.
+- **Cobblemon adapter** (`integration/cobblemon/CobblemonGameEventAdapter`): the single class that
+  imports Cobblemon. Subscribes to Cobblemon's `POKEMON_CAPTURED` and `BATTLE_VICTORY` events and
+  republishes them as `pokemon_captured` (species, shiny) and `battle_won` (battle kind, format, wild
+  capture). Compiled against **Cobblemon 1.7.3+1.21.1** (`modCompileOnly`) — **not bundled, not
+  required at runtime**; the core runs standalone and the bridge activates only when Cobblemon is
+  installed (gated by the Fabric mod list; status via `/cvcore debug`).
+- **Debug tooling**: `/cvcore debug events on|off` (log every game event) and
+  `/cvcore debug publish capture <player> <species> [shiny]` (inject a synthetic event to test the
+  whole pipeline without Cobblemon). `/cvcore debug` reports bus stats + bridge status.
 - `CoreServices.gameEvents()` accessor.
+
+### Fixed (from PR review)
+- **Atomic config reload**: `reload()` validates the entire candidate set (every file + cross-file
+  references) before swapping anything in; a rejected reload leaves the previous config live in full.
+- `GameEventBus.publish` documents that it isolates listener `Exception`s (not "never throws") and
+  guards against a null event.
+- Debug logging is documented as built into the bus (not a listener); the count reads "consumer(s)".
 
 ### Notes
 - Dispatch is synchronous for now; an async queue can slot in behind `publish()` later without
   changing the producer/listener contracts.
-- The actual Cobblemon capture/battle publishing requires compiling the adapter against Cobblemon's
-  (Kotlin) event API and can only be verified on a live server — see docs/game-events.md.
+- The Cobblemon subscription is compile-verified against the real 1.7.3 API but must be confirmed
+  firing on a live Cobblemon server — see docs/game-events.md.
 
 ## [0.5.2] - Unreleased
 

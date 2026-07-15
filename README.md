@@ -15,9 +15,9 @@ depend on this one.
 ## Status — 0.6.0 (Game Event Bus)
 
 Starts the game-event ingestion layer: a central bus that game-world actions publish to and
-subsystems subscribe to. 0.6.0 ships the bus, event contract, live player events, a Cobblemon adapter
-scaffold, and debug/synthetic-publish tooling; consumers (objective handlers, statistics) land in
-0.6.1.
+subsystems subscribe to. 0.6.0 ships the bus, event contract, live player events, a **real Cobblemon
+adapter** (capture + battle-win events, compiled against Cobblemon 1.7.3 as an optional dependency),
+and debug/synthetic-publish tooling; consumers (objective handlers, statistics) land in 0.6.1.
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
@@ -35,7 +35,7 @@ scaffold, and debug/synthetic-publish tooling; consumers (objective handlers, st
 | Seasons           | Objectives, points, milestones (→ rewards), lifecycle detection |
 | Events            | Lifecycle state machine, participation, completion rewards       |
 | Leaderboards      | Season points + event score (`/…leaderboard`, `/cvcore season top`) |
-| **Game event bus**| **Publish/subscribe ingestion layer; player events live; Cobblemon adapter scaffold** |
+| **Game event bus**| **Publish/subscribe ingestion layer; player events + Cobblemon capture/battle (optional dep)** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 

@@ -456,11 +456,12 @@ Game-world actions are published to a central **event bus** that subsystems subs
 bus, the event contract, and **player join/leave events** are live; the first real consumers
 (objective handlers, statistics) arrive in 0.6.1.
 
-- **Cobblemon capture/battle events are not yet firing from gameplay** — the adapter is detected and
-  scaffolded, but its subscription must be compiled against a specific Cobblemon version (a follow-up).
-- **Test the pipeline now** without Cobblemon: `/cvcore debug events on`, then
-  `/cvcore debug publish capture <player> <species> [shiny]` — you'll see the event logged with its
-  attached listeners.
+- **Cobblemon captures and battle wins are wired** (compiled against Cobblemon 1.7.3): with Cobblemon
+  installed they fire `pokemon_captured` / `battle_won` on the bus. Cobblemon stays **optional** — the
+  core runs without it, and `/cvcore debug` shows `cobblemon bridge: active|idle`. (The subscription is
+  compile-verified; confirm it fires live with `/cvcore debug events on` and a real capture.)
+- **Test the pipeline without Cobblemon**: `/cvcore debug events on`, then
+  `/cvcore debug publish capture <player> <species> [shiny]` — you'll see the event logged.
 
 See [game-events.md](game-events.md) for the full reference.
 - **Logs:** each subsystem logs under `CobbleverseCore/<AREA>` (CORE, CONFIG, INTEGRATION, AUDIT).

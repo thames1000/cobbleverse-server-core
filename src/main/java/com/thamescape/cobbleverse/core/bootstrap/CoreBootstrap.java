@@ -141,7 +141,14 @@ public final class CoreBootstrap {
 
         // 5e. Game-event ingestion bus (producers publish; consumers subscribe — 0.6.0).
         GameEventBus gameEventBus = new GameEventBus();
-        new CobblemonGameEventAdapter(gameEventBus).register();
+        // Cobblemon is optional: only touch the adapter (which imports Cobblemon classes) when the mod
+        // is actually installed, so the core loads and runs standalone without it.
+        boolean cobblemonBridgeActive = FabricLoader.getInstance().isModLoaded("cobblemon");
+        if (cobblemonBridgeActive) {
+            new CobblemonGameEventAdapter(gameEventBus).register();
+        } else {
+            LOGGER.info("Cobblemon not present; game-event bridge idle");
+        }
 
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();

@@ -264,6 +264,8 @@ public final class CoreCommand {
         var bus = CoreServices.gameEvents();
         line(source, "game events: " + bus.publishedCount() + " published, " + bus.listenerCount()
                 + " consumer(s), debug=" + bus.isDebug());
+        line(source, "cobblemon bridge: "
+                + (FabricLoader.getInstance().isModLoaded("cobblemon") ? "active" : "idle"));
         return 1;
     }
 

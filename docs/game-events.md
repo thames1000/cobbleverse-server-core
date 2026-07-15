@@ -25,25 +25,30 @@ Battle win ────────┘                 ├─▶ Statistics list
 | `source()`     | producing subsystem, e.g. `cobblemon` / `minecraft` |
 | `metadata()`   | type-specific details a generic consumer can read (e.g. `species`, `shiny`) |
 
-Event types in 0.6.0: `player_joined`, `player_left`, `pokemon_captured`, `battle_won`.
+Event types in 0.6.0: `player_joined`, `player_left`, `pokemon_captured` (metadata: `species`, `shiny`),
+`battle_won` (metadata: `battleKind` = `pvp`/`pvn`/`pvw`, `format` = e.g. `singles`/`doubles`,
+`wildCapture`).
 
 Dispatch is **synchronous and exception-isolated** — one listener throwing never stops the others or
 the producer. (An async queue can slot in behind `publish()` later without changing any contract.)
 
 ## Producing events
 
-- **Player events are live**: the player lifecycle publishes `player_joined` / `player_left`.
-- **Cobblemon events** go through `CobblemonGameEventAdapter` — the *only* class that knows Cobblemon.
-  It detects Cobblemon and exposes `publishCapture(...)` / `publishBattleWon(...)`.
+- **Player events**: the player lifecycle publishes `player_joined` / `player_left`.
+- **Cobblemon events** go through `CobblemonGameEventAdapter` — the *only* class that imports
+  Cobblemon. It subscribes to Cobblemon's `POKEMON_CAPTURED` and `BATTLE_VICTORY` events and republishes
+  them as `pokemon_captured` / `battle_won`.
 
-### Cobblemon wiring status (important)
+### Cobblemon dependency (optional)
 
-In 0.6.0 the adapter's **detection and publish seam are in place**, but the concrete subscription to
-Cobblemon's capture/battle events is **not yet wired**, because it must be compiled against
-Cobblemon's (Kotlin) event API for a specific Cobblemon version (which also pulls in
-`fabric-language-kotlin` at runtime). That step is a follow-up once the target version is fixed. Until
-then, capture/battle events won't fire from real gameplay — but you can exercise the entire pipeline
-with the debug command below.
+The adapter is **compiled against Cobblemon 1.7.3+1.21.1** (`modCompileOnly`) but Cobblemon is **not
+bundled and not required at runtime**. The core runs standalone; the adapter is only instantiated when
+Cobblemon is actually installed (the bootstrap gates on the Fabric mod list). `/cvcore debug` shows
+`cobblemon bridge: active|idle`.
+
+> **Runtime verification:** the subscription is compile-verified against the real Cobblemon 1.7.3 API,
+> but firing on an actual capture/battle can only be confirmed on a live Cobblemon server. Turn on
+> `/cvcore debug events on` and catch something / win a battle to confirm the events flow.
 
 ## Debugging & testing (no Cobblemon needed)
 
