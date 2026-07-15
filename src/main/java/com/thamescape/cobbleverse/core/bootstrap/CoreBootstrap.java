@@ -13,6 +13,7 @@ import com.thamescape.cobbleverse.core.diagnostics.HealthCheckService;
 import com.thamescape.cobbleverse.core.diagnostics.IntegrationHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.PermissionHealthCheck;
 import com.thamescape.cobbleverse.core.diagnostics.SchedulerHealthCheck;
+import com.thamescape.cobbleverse.core.event.EventService;
 import com.thamescape.cobbleverse.core.integration.IntegrationManager;
 import com.thamescape.cobbleverse.core.integration.IntegrationReport;
 import com.thamescape.cobbleverse.core.message.MessageService;
@@ -22,6 +23,7 @@ import com.thamescape.cobbleverse.core.persistence.MigrationManager;
 import com.thamescape.cobbleverse.core.persistence.SqliteDatabaseProvider;
 import com.thamescape.cobbleverse.core.persistence.repository.AuditRepository;
 import com.thamescape.cobbleverse.core.persistence.repository.CurrencyRepository;
+import com.thamescape.cobbleverse.core.persistence.repository.EventRepository;
 import com.thamescape.cobbleverse.core.persistence.repository.PlayerProfileRepository;
 import com.thamescape.cobbleverse.core.persistence.repository.RewardRepository;
 import com.thamescape.cobbleverse.core.player.PlayerLifecycleListener;
@@ -130,6 +132,10 @@ public final class CoreBootstrap {
                 new SeasonRepository(), rewardService, auditService, objectiveRegistry);
         seasonService.checkLifecycle(); // record initial lifecycle state on boot
 
+        // 5d. Event system (admin-driven lifecycle in 0.5.0).
+        EventService eventService = new EventService(configManager, databaseManager,
+                new EventRepository(), rewardService, auditService);
+
         // 6. Scheduler + periodic tasks.
         CoreScheduler scheduler = new CoreScheduler();
         scheduler.init();
@@ -159,7 +165,7 @@ public final class CoreBootstrap {
         ServiceRegistry registry = new ServiceRegistry(
                 configManager, permissionService, messageService, integrationManager,
                 auditService, healthCheckService, databaseManager, playerService, scheduler,
-                rewardService, currencyService, seasonService);
+                rewardService, currencyService, seasonService, eventService);
         CoreServices.install(registry);
 
         // 10. Register commands and player lifecycle.

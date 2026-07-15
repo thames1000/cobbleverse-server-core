@@ -78,6 +78,11 @@ sample definition on first run; **runtime-reloadable** via `/cvcore reload`. See
 Season definitions with objectives and points milestones. The active season is named by `core.json`'s
 `activeSeason`. Runtime-reloadable via `/cvcore reload`. See [seasons.md](seasons.md).
 
+## `events.json` (0.5.0)
+
+Event definitions (lifecycle-managed activities with participation and completion rewards).
+Runtime-reloadable via `/cvcore reload`. See [events.md](events.md).
+
 ## Planned files
 
 Later versions add `permissions.json`, `scheduler.json`, `integrations.json` and `web-api.json`, each

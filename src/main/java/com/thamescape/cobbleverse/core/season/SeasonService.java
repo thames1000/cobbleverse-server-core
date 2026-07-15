@@ -92,6 +92,12 @@ public final class SeasonService {
         return db.callSync(conn -> repository.points(conn, uuid, seasonId));
     }
 
+    /** Top players by points in a season, highest first. */
+    public java.util.List<com.thamescape.cobbleverse.core.persistence.repository.SeasonRepository.LeaderboardEntry>
+            leaderboard(String seasonId, int limit) {
+        return db.callSync(conn -> repository.topByPoints(conn, seasonId, limit));
+    }
+
     public SeasonProgress progress(UUID uuid, String seasonId) {
         return db.callSync(conn -> {
             int points = repository.points(conn, uuid, seasonId);

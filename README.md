@@ -12,17 +12,17 @@ depend on this one.
 - **Loader:** Fabric (Java 21)
 - **License:** MIT
 
-## Status — 0.4.0 (Seasons + Objectives)
+## Status — 0.5.0 (Events + Leaderboards)
 
-Builds on the reward system with time-boxed seasons, objectives, and points milestones (first pass:
-manual objectives; event-driven tracking comes later):
+Builds on seasons with lifecycle-managed events, participation, completion rewards, and season/event
+leaderboards (first pass: admin-driven lifecycle):
 
 | System            | State                                                            |
 |-------------------|-----------------------------------------------------------------|
 | Configuration     | JSON loader + validator, strict (never silently defaults)       |
 | Service registry  | Single controlled locator (`CoreServices`)                      |
 | Permissions       | `fabric-permissions-api` with operator-level fallback           |
-| Commands          | `/cvcore …`, `/profile [player]`, `/rewards …`, `/season …`      |
+| Commands          | `/cvcore …`, `/profile`, `/rewards …`, `/season …`, `/event …`   |
 | Messaging         | MiniMessage-subset formatting → native `Text`                   |
 | Integrations      | Runtime detection of 7 mods (no compile-time coupling)          |
 | Persistence       | SQLite, off-thread worker, versioned auto-migrations            |
@@ -30,11 +30,14 @@ manual objectives; event-driven tracking comes later):
 | Scheduler         | Tick-based repeating / one-shot tasks                           |
 | Rewards           | Central service: validate, claim-once, offline queue + retry/dead-letter, preview |
 | Currencies        | `CurrencyProvider` abstraction: internal (DB) + CobbleDollars    |
-| **Seasons**       | **Objectives, points, milestones (→ rewards), lifecycle detection** |
+| Seasons           | Objectives, points, milestones (→ rewards), lifecycle detection |
+| **Events**        | **Lifecycle state machine, participation, completion rewards**   |
+| **Leaderboards**  | **Season points + event score (`/…leaderboard`, `/cvcore season top`)** |
 | Health checks     | Config, permissions, integrations, database, scheduler          |
 | Auditing          | Structured log + in-memory ring buffer + `audit_log` table      |
 
-Events (and event-driven objective tracking) arrive in later versions — see the [roadmap](#roadmap).
+Event-driven objective tracking (Cobblemon) and web integration arrive later — see the
+[roadmap](#roadmap).
 
 ## Running a server?
 
@@ -91,12 +94,12 @@ error rather than being silently replaced.
 | 0.1.0   | Foundation         |
 | 0.2.0   | Player profiles + SQLite |
 | 0.3.0   | Rewards + currency |
-| 0.4.0   | Seasons + objectives *(this release)* |
-| 0.5.0   | Events + leaderboards |
+| 0.4.0   | Seasons + objectives |
+| 0.5.0   | Events + leaderboards *(this release)* |
 | 0.6.0   | Cobblemon tracking |
 | 0.7.0   | Web integration |
 | 1.0.0   | Stable public API |
 
 See `docs/` for the [server owner guide](docs/server-owner-guide.md), architecture, commands,
 permissions, configuration, [rewards](docs/rewards.md), [seasons](docs/seasons.md),
-[database](docs/database.md) and integration details.
+[events](docs/events.md), [database](docs/database.md) and integration details.

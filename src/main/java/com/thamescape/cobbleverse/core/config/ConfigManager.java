@@ -19,12 +19,14 @@ public final class ConfigManager {
     private static final String DATABASE_FILE = "database.json";
     private static final String REWARDS_FILE = "rewards.json";
     private static final String SEASONS_FILE = "seasons.json";
+    private static final String EVENTS_FILE = "events.json";
 
     private final ConfigLoader loader;
     private volatile CoreConfig coreConfig;
     private volatile DatabaseConfig databaseConfig;
     private volatile RewardsConfig rewardsConfig;
     private volatile SeasonsConfig seasonsConfig;
+    private volatile EventsConfig eventsConfig;
 
     public ConfigManager(ConfigLoader loader) {
         this.loader = loader;
@@ -52,6 +54,7 @@ public final class ConfigManager {
 
         this.rewardsConfig = loadRewards();
         this.seasonsConfig = loadSeasons();
+        this.eventsConfig = loadEvents();
     }
 
     private RewardsConfig loadRewards() {
@@ -75,6 +78,17 @@ public final class ConfigManager {
         }
         seasons.seasons.forEach((id, def) -> def.id = id);
         return seasons;
+    }
+
+    private EventsConfig loadEvents() {
+        EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
+        List<String> problems = ConfigValidator.validate(events);
+        if (!problems.isEmpty()) {
+            throw new ConfigurationException("CV-CONFIG-018",
+                    "Invalid events.json:\n  - " + String.join("\n  - ", problems));
+        }
+        events.events.forEach((id, def) -> def.id = id);
+        return events;
     }
 
     /**
@@ -116,6 +130,17 @@ public final class ConfigManager {
         } else {
             LOGGER.warn("seasons.json reload rejected; keeping previous. {} problem(s).", seasonProblems.size());
             problems.addAll(seasonProblems);
+        }
+
+        EventsConfig events = loader.loadOrCreate(EVENTS_FILE, EventsConfig.class, EventsConfig::defaults);
+        List<String> eventProblems = ConfigValidator.validate(events);
+        if (eventProblems.isEmpty()) {
+            events.events.forEach((id, def) -> def.id = id);
+            this.eventsConfig = events;
+            LOGGER.info("Reloaded event definitions ({})", events.events.size());
+        } else {
+            LOGGER.warn("events.json reload rejected; keeping previous. {} problem(s).", eventProblems.size());
+            problems.addAll(eventProblems);
         }
 
         return problems;
@@ -160,6 +185,16 @@ public final class ConfigManager {
         if (current == null) {
             throw new ConfigurationException("CV-CONFIG-017",
                     "Seasons configuration accessed before load()");
+        }
+        return current;
+    }
+
+    /** The event definitions. Runtime-reloadable. */
+    public EventsConfig events() {
+        EventsConfig current = eventsConfig;
+        if (current == null) {
+            throw new ConfigurationException("CV-CONFIG-019",
+                    "Events configuration accessed before load()");
         }
         return current;
     }
